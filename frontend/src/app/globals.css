@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  --font-heading: "Space Grotesk", "Segoe UI", Arial, sans-serif;
+  --font-body: "DM Sans", "Segoe UI", Arial, sans-serif;
+
+  --color-brand: #1b5e3b;
+  --color-brand-mid: #34d471;
+  --color-brand-light: #e8f5ee;
+  --color-brand-dark: #071109;
+
+  /* ── Light theme tokens (management / admin screens) ── */
+  --color-app-bg:      #f2f5f3;
+  --color-app-surface: #ffffff;
+  --color-app-surface2: #e8f0eb;
+  --color-app-border:  #dde8e1;
+  --color-app-text:    #0d1a10;
+  --color-app-dim:     #5c7268;
+  --color-app-accent:  #1b5e3b;
+
+  /* ── TV / operational screen tokens (light theme) ── */
+  --color-tv-bg:       #eef3f0;
+  --color-tv-surface:  #ffffff;
+  --color-tv-surface2: #f2f5f3;
+  --color-tv-border:   #dde8e1;
+  --color-tv-text:     #0d1a10;
+  --color-tv-dim:      #5c7268;
+  --color-tv-accent:   #1b5e3b;
+
+  /* ── Semantic state colors ── */
+  --color-state-critica:  #dc2626;
+  --color-state-atencion: #d97706;
+  --color-state-ok:       #16a34a;
+  --color-state-info:     #2563eb;
+  --color-state-neutral:  #64748b;
+
+  /* ── Shadows ── */
+  --shadow-brand:    0 18px 60px rgba(27, 94, 59, 0.28);
+  --shadow-panel:    0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-card:     0 1px 4px rgba(0, 0, 0, 0.08);
+  --shadow-deck:     0 30px 80px rgba(0, 0, 0, 0.34);
+  --shadow-critical: 0 4px 14px #dc262644;
+}
+
+:root {
+  --brand: #1b5e3b;
+  --brand-mid: #34d471;
+  --brand-light: #e8f5ee;
+  --brand-dark: #071109;
+  --app-bg: #f2f5f3;
+  --app-surface: #ffffff;
+  --app-surface2: #e8f0eb;
+  --app-border: #dde8e1;
+  --app-text: #0d1a10;
+  --app-text-dim: #5c7268;
+  --tv-bg: #eef3f0;
+  --tv-panel: #ffffff;
+  --tv-panel-soft: #f2f5f3;
+  --tv-line: #dde8e1;
+  --tv-muted: #5c7268;
+  --tv-accent: #1b5e3b;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--font-body), sans-serif;
+  text-rendering: geometricPrecision;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, input, textarea, select {
+  outline-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+[aria-live] {
+  min-height: 1px;
+}
+
+::selection {
+  background: var(--brand);
+  color: white;
+}
+
+/* ── TV / light-theme override scope ── */
+.tv-theme {
+  background: var(--tv-bg);
+  color: var(--tv-text, #0d1a10);
+}
+
+/* ── Logo gradient ── */
+.t4m-logo {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.16) 0 22%,
+      transparent 22% 44%,
+      rgba(255, 255, 255, 0.08) 44% 66%,
+      transparent 66%
+    ),
+    linear-gradient(135deg, #35d978 0%, #147844 100%);
+}
+
+/* ── Subtle scrollbar for app panels ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+.tv-theme ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}

@@ -1,0 +1,2 @@
+ALTER TABLE maquinaria
+ADD COLUMN IF NOT EXISTS estado VARCHAR(40) NOT NULL DEFAULT 'operativa';
