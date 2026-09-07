@@ -8,26 +8,105 @@ y se centra en **cómo correrla en otro servidor sin sorpresas**.
 
 ## 1. Despliegue local con Docker Compose
 
+### Requisitos
+
+- **Docker Desktop** instalado y corriendo (la app usa `docker compose`,
+  no `docker-compose` v1).
+- Al menos 4 GB de RAM libres (Postgres + backend + frontend + nginx).
+- Puertos `80`, `3000`, `5432`, `8000` libres en el host.
+
+### Pasos
+
 ```bash
-# Clonar
+# 1. Clonar
 git clone https://github.com/Robertocuinas/tools4milk-dev.git
 cd tools4milk-dev
 
-# Crear el .env del backend copiando la plantilla
-cp backend/.env.example backend/.env  # si no existe, ver §2
+# 2. Configurar el entorno (opcional pero recomendado)
+cat > .env <<'EOF'
+ENVIRONMENT=development
+SECRET_KEY=$(openssl rand -base64 48)   # ⚠ cambia esto en producción
+INITIAL_DEMO_PASSWORD=testpass123      # déjalo vacío en producción
+AEMET_API_KEY=                          # opcional: tu API key de AEMET OpenData
+EOF
 
-# Levantar (Postgres + backend + frontend + nginx)
-docker compose up -d
+# 3. Levantar el stack limpio
+#    - Postgres espera a estar healthy
+#    - Backend aplica migraciones (0000..0009) y siembra usuarios demo
+#    - Frontend espera al backend
+#    - Nginx enruta solo cuando frontend Y backend están healthy
+docker compose up -d --build
+
+# 4. Verificar que todo está en pie
+docker compose ps
+# Todos los servicios deben estar en estado "healthy" o "running".
+
+docker compose logs -f backend | head -30
+# Debe terminar con "Application startup complete" y un "Uvicorn running on
+# http://0.0.0.0:8000".
 ```
 
-URLs por defecto:
-- Frontend (Nginx): http://localhost
-- Backend FastAPI: http://localhost:8000
-- Swagger UI: http://localhost:8000/docs
-- Postgres: localhost:5432 (interno a la red Docker)
+### URLs por defecto
 
-El primer arranque aplica las migraciones numeradas de
-`backend/migrations/` (0000…0009) y siembra 5 usuarios demo. Ver §5.
+- **Frontend (Nginx)**: http://localhost
+- **Backend FastAPI**: http://localhost:8000
+- **Swagger UI**: http://localhost:8000/docs
+- **Postgres**: `localhost:5432` (interno a la red Docker como `db:5432`)
+
+### Resetear todo a cero (BD limpia)
+
+Si quieres empezar desde una BD vacía:
+
+```bash
+docker compose down -v     # ⚠ BORRA todos los datos
+docker compose up -d --build
+```
+
+El `-v` borra el volumen `postgres_data`. La próxima vez que arranque,
+`docker-entrypoint-initdb.d/init.sql` creará el schema base y el backend
+aplicará las migraciones numeradas y sembrará los 5 usuarios demo.
+
+### Poblar con datos de demo
+
+El backend crea 5 usuarios en el primer arranque (ver §5) pero las tablas
+de dominio (animales, lactaciones, alertas…) arrancan vacías. Para
+poblar la BD con datos de ejemplo, ejecuta el seed manual:
+
+```bash
+docker compose exec backend python scripts/seed_realistic_data.py
+```
+
+El script es idempotente: si los datos demo ya existen, no los duplica.
+Si quieres sembrar también turnos y asignaciones de la semana en
+curso, ejecuta además:
+
+```bash
+docker compose exec backend python scripts/populate_shifts.py \
+    --base-url http://localhost:8000 \
+    --username admin \
+    --password testpass123 \
+    --days 7
+```
+
+### Verificar end-to-end que la BD tiene datos
+
+```bash
+# 1. ¿Hay animales?
+docker compose exec db psql -U postgres -d tools4milk \
+    -c "SELECT count(*) FROM animales;"
+
+# 2. ¿Login funciona?
+curl -s -X POST http://localhost:8000/api/v1/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username":"admin","password":"testpass123"}' \
+    -i | head -10
+# Debe devolver 200 + Set-Cookie: t4m_token=...; HttpOnly; ...
+
+# 3. ¿El dashboard devuelve KPIs reales (no cero)?
+#    (con la cookie del paso 2)
+curl -s http://localhost:8000/api/v1/dashboard/summary \
+    --cookie "t4m_token=..." | python -m json.tool
+```
 
 ---
 

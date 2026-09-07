@@ -27,6 +27,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:-tools4milk-dev-secret-change-me}
       INITIAL_DEMO_PASSWORD: ${INITIAL_DEMO_PASSWORD:-testpass123}
+      AEMET_API_KEY: ${AEMET_API_KEY:-}
       CORS_ORIGINS: '["http://localhost","http://localhost:80","http://127.0.0.1","http://localhost:3000","http://127.0.0.1:3000"]'
       PYTHONUNBUFFERED: 1
     ports:
@@ -35,6 +36,15 @@ services:
       db:
         condition: service_healthy
     command: sh -c "python scripts/apply_migrations.py && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      # ``/health`` devuelve 200 cuando la app y la BD responden. Nginx
+      # (depends_on condition: service_healthy) esperará a este check
+      # antes de empezar a enrutar tráfico.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
 
   frontend:
     build:
@@ -48,6 +58,15 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    healthcheck:
+      # Next responde 200 en / incluso antes de hidratar. Útil para
+      # que nginx no enrute tráfico al frontend hasta que el dev
+      # server esté escuchando (la primera compilación puede tardar).
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
 
   nginx:
     image: nginx:alpine
@@ -60,7 +79,7 @@ services:
       backend:
         condition: service_healthy
       frontend:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"]
       interval: 15s

@@ -562,7 +562,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Población de datos realistas Tools4Milk (idempotente).")
     parser.add_argument("--status", action="store_true", help="Solo mostrar recuentos, no sembrar.")
     parser.add_argument("--weather-days", type=int, default=14, help="Días de lecturas meteorológicas a generar.")
+    parser.add_argument(
+        "--no-create-all",
+        action="store_true",
+        help=(
+            "No crear las tablas si no existen. Útil en CI donde las "
+            "migraciones se aplican antes. Por defecto el script crea "
+            "el schema (CREATE TABLE IF NOT EXISTS) para poder correrlo "
+            "contra una BD vacía sin tener que aplicar migraciones antes."
+        ),
+    )
     args = parser.parse_args()
+
+    # Asegurar que el schema existe. Idempotente: ``create_all`` con
+    # checkfirst=True (default) solo crea tablas/índices que no existen.
+    # En el flujo docker-compose habitual, las migraciones ya corrieron
+    # (no-op). En un entorno limpio (BD recién creada, sin migraciones),
+    # esto evita el crash "no such table" y permite un seed rápido.
+    if not args.no_create_all:
+        from app.database import Base, engine
+
+        Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
