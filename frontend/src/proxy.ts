@@ -14,6 +14,13 @@ const protectedRoutes = [
   '/settings',
 ]
 
+// La cookie de sesión la emite el backend en ``POST /api/v1/auth/login`` con
+// ``HttpOnly; Secure (en prod); SameSite=Lax``. Aunque el flag HttpOnly
+// impide que JavaScript la lea, el navegador SÍ la expone al middleware de
+// Next (server-side) — basta con comprobar presencia para redirigir UX.
+// La validación criptográfica real la hace ``GET /api/v1/auth/me`` en el
+// backend: una cookie presente pero caducada devuelve 401 y el layout
+// cliente limpia el estado de sesión.
 const TOKEN_COOKIE = 't4m_token'
 
 export function proxy(request: NextRequest) {

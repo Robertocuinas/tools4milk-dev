@@ -90,7 +90,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hydrate = useAppStore((state) => state.hydrate);
   const isHydrated = useAppStore((state) => state.isHydrated);
-  const token = useAppStore((state) => state.token);
   const user = useAppStore((state) => state.user);
   const logout = useAppStore((state) => state.logout);
   const { can, role } = usePermissions();
@@ -103,10 +102,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [hydrate, workerHydrate]);
 
   useEffect(() => {
-    if (isHydrated && !token) router.replace("/");
-  }, [isHydrated, token, router]);
+    // El JWT vive en una cookie HttpOnly; el ``proxy.ts`` ya redirige si
+    // la cookie no está presente. Aquí solo necesitamos ``user`` para
+    // renderizar la sidebar. Si la cookie está caducada, la primera
+    // llamada a la API (en una página hija) recibirá 401 y se manejará
+    // allí; en este layout basta con no redirigir dos veces.
+    if (isHydrated && !user) router.replace("/");
+  }, [isHydrated, user, router]);
 
-  if (!isHydrated || !token) {
+  if (!isHydrated || !user) {
     return (
       <div className="grid min-h-screen place-items-center bg-app-bg">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
@@ -115,8 +119,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   function handleLogout() {
-    logout();
-    router.replace("/");
+    // Llamamos al backend para borrar la cookie HttpOnly antes de limpiar
+    // el estado local. Si la llamada falla igualmente limpiamos local
+    // y redirigimos — el objetivo UX es sacar al usuario.
+    fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined).finally(() => {
+      logout();
+      router.replace("/");
+    });
   }
 
   return (

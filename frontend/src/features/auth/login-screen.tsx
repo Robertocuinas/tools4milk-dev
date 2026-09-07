@@ -60,7 +60,7 @@ function StatusDot({ online, loading = false }: { online: boolean; loading?: boo
 export function LoginScreen() {
   const router = useRouter();
   const hydrate = useAppStore((state) => state.hydrate);
-  const token = useAppStore((state) => state.token);
+  const user = useAppStore((state) => state.user);
   const isHydrated = useAppStore((state) => state.isHydrated);
   const selectedRole = useAppStore((state) => state.selectedRole);
   const setSelectedRole = useAppStore((state) => state.setSelectedRole);
@@ -72,8 +72,17 @@ export function LoginScreen() {
 
   useEffect(() => { hydrate(); }, [hydrate]);
   useEffect(() => {
-    if (isHydrated && token) router.replace("/dashboard");
-  }, [isHydrated, token, router]);
+    // Si ya hay user en localStorage y además el backend reconoce la cookie,
+    // saltamos al dashboard. El backend es la fuente de verdad.
+    if (!isHydrated || !user) return;
+    api.me()
+      .then(() => router.replace("/dashboard"))
+      .catch(() => {
+        // Cookie caducada o inválida — limpiamos estado y dejamos al usuario
+        // volver a hacer login en este mismo formulario.
+        useAppStore.getState().logout();
+      });
+  }, [isHydrated, user, router]);
 
   const health = useQuery({
     queryKey: ["health"],
@@ -92,7 +101,9 @@ export function LoginScreen() {
     onSuccess: (data) => {
       const realRole = data.user.role ?? selectedRole;
       setSelectedRole(realRole);
-      setSession(data.token.access_token, data.user);
+      // El JWT ya está en la cookie HttpOnly (Set-Cookie del backend).
+      // Aquí solo guardamos el user en el store.
+      setSession(data.user);
       setRedirecting(true);
       router.push("/dashboard");
     },

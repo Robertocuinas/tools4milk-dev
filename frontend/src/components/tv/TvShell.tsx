@@ -29,15 +29,15 @@ export function TvShell({
   const router = useRouter();
   const hydrate = useAppStore((s) => s.hydrate);
   const isHydrated = useAppStore((s) => s.isHydrated);
-  const token = useAppStore((s) => s.token);
+  const user = useAppStore((s) => s.user);
 
   useEffect(() => { hydrate(); }, [hydrate]);
 
   useEffect(() => {
-    if (isHydrated && !token) router.replace("/");
-  }, [isHydrated, token, router]);
+    if (isHydrated && !user) router.replace("/");
+  }, [isHydrated, user, router]);
 
-  if (!isHydrated || !token) {
+  if (!isHydrated || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-tv-bg">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-tv-accent border-t-transparent" />
