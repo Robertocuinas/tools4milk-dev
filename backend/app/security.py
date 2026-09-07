@@ -264,7 +264,13 @@ def unset_auth_cookie(response) -> None:
 
 def set_refresh_cookie(response, token: str) -> None:
     """Adjunta el refresh token como cookie HttpOnly. El Max-Age es el
-    TTL del refresh (``refresh_token_expire_days``) en segundos."""
+    TTL del refresh (``refresh_token_expire_days``) en segundos.
+
+    ``SameSite=Strict`` (en lugar de ``Lax`` que usa el access) porque
+    el refresh nunca se manda en navegación cross-site — solo en
+    llamadas explícitas de la SPA al backend. Esto blinda el flujo
+    contra un eventual CSRF sobre el endpoint de rotación.
+    """
     is_prod = settings.environment.lower() == "production"
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
@@ -273,7 +279,7 @@ def set_refresh_cookie(response, token: str) -> None:
         path="/",
         httponly=True,
         secure=is_prod,
-        samesite="lax",
+        samesite="strict",
     )
 
 

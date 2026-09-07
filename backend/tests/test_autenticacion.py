@@ -249,6 +249,18 @@ class TestGetMe:
         assert me_response.status_code == status.HTTP_200_OK
         assert me_response.json()["username"] == test_user_credentials["username"]
 
+    def test_refresh_cookie_samesite_strict(self, client, test_user, test_user_credentials):
+        """La cookie de refresh usa ``SameSite=Strict`` (más estricto
+        que la del access, que es ``Lax``). El refresh no se envía en
+        navegación cross-site, así que ``Strict`` es seguro y blinda
+        el endpoint de rotación contra CSRF.
+        """
+        response = client.post("/api/v1/auth/login", json=test_user_credentials)
+        set_cookies = "\n".join(response.headers.get_list("set-cookie")).lower()
+        assert "samesite=strict" in set_cookies, (
+            f"Refresh cookie sin SameSite=Strict. Cookies: {set_cookies}"
+        )
+
     def test_logout_borra_cookie_httponly(self, client, test_user, test_user_credentials):
         """R8 — POST /auth/logout debe devolver Set-Cookie con max-age=0
         para que el navegador borre la cookie HttpOnly del cliente."""
