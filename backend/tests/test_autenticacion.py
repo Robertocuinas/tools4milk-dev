@@ -303,46 +303,105 @@ class TestLoginRateLimit:
 
 
 class TestRefreshToken:
-    """Tests para el endpoint POST /auth/refresh"""
+    """Tests para el endpoint POST /auth/refresh (R12 — rotación + reuse detection)."""
 
     def test_refresh_token_exitoso(self, client, test_user, test_user_credentials):
-        """Prueba refrescar token válido"""
-        # Primero hacer login
-        login_response = client.post(
-            "/api/v1/auth/login",
-            json=test_user_credentials
-        )
-        old_token = login_response.json()["token"]["access_token"]
+        """Login emite (access, refresh). /refresh rota el par."""
+        login = client.post("/api/v1/auth/login", json=test_user_credentials)
+        assert login.status_code == status.HTTP_200_OK
+        login_data = login.json()
+        old_access = login_data["token"]["access_token"]
+        old_refresh = login_data["token"]["refresh_token"]
+        assert old_refresh is not None
 
-        # Refrescar token
+        # Rotar.
         response = client.post(
             "/api/v1/auth/refresh",
-            headers={"Authorization": f"Bearer {old_token}"}
+            json={"refresh_token": old_refresh},
         )
-
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-
-        # El nuevo token debe ser diferente
         assert data["access_token"]
-        assert data["access_token"] != old_token
-        assert data["token_type"] == "bearer"
-        assert data["expires_in"] > 0
+        assert data["access_token"] != old_access
+        assert data["refresh_token"]
+        assert data["refresh_token"] != old_refresh
+        assert data["refresh_expires_in"] > 0
 
     def test_refresh_token_sin_autenticacion(self, client):
-        """Prueba refrescar token sin autenticación. Esperado: 401."""
+        """Sin body ni cookie de refresh → 401."""
         response = client.post("/api/v1/auth/refresh")
-
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_refresh_token_invalido(self, client):
-        """Prueba refrescar token inválido"""
+        """Un refresh que no es JWT o está mal firmado → 401."""
         response = client.post(
             "/api/v1/auth/refresh",
-            headers={"Authorization": "Bearer token_invalido"}
+            json={"refresh_token": "esto.no.es.jwt"},
         )
-
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_refresh_token_reuse_detection(self, client, test_user, test_user_credentials):
+        """Reutilizar un refresh ya consumido revoca TODOS los refresh
+        del usuario (defensa contra robo). El segundo intento con el
+        mismo refresh devuelve 401, y un /refresh con un refresh
+        emitido ANTES de la revocación también devuelve 401.
+        """
+        # Emite 2 refresh (rotando una vez para tener 2 en la tabla).
+        login = client.post("/api/v1/auth/login", json=test_user_credentials)
+        r1 = login.json()["token"]["refresh_token"]
+
+        # Rota una vez (consume r1, emite r2).
+        r1_response = client.post("/api/v1/auth/refresh", json={"refresh_token": r1})
+        r2 = r1_response.json()["refresh_token"]
+        assert r1 != r2
+
+        # Login de nuevo para tener un tercer refresh (r3) ANTES de
+        # provocar el reuse. Si reusamos r1, el sistema debe invalidar
+        # también r2 y r3.
+        login2 = client.post("/api/v1/auth/login", json=test_user_credentials)
+        r3 = login2.json()["token"]["refresh_token"]
+
+        # Reusar r1 (ya revocado) → 401 y revoca todo.
+        reuse = client.post("/api/v1/auth/refresh", json={"refresh_token": r1})
+        assert reuse.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "todas las sesiones" in reuse.json()["detail"].lower() or \
+               "todas las sesiones" in reuse.json()["detail"]
+
+        # Tras la revocación masiva, ni r2 ni r3 funcionan.
+        r2_after = client.post("/api/v1/auth/refresh", json={"refresh_token": r2})
+        assert r2_after.status_code == status.HTTP_401_UNAUTHORIZED
+        r3_after = client.post("/api/v1/auth/refresh", json={"refresh_token": r3})
+        assert r3_after.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_refresh_max_per_user_revoca_mas_antiguo(self, client, test_user, test_user_credentials):
+        """Si el usuario supera ``refresh_token_max_per_user`` (5 por
+        defecto), el refresh más antiguo se revoca al emitir uno nuevo.
+
+        Para no chocar con el rate limiter de /login (5/60s por IP),
+        emitimos los 6 tokens directamente con ``create_refresh_token``
+        — el cap es del helper, no del endpoint. Comprobamos la
+        invariante consultando ``refresh_tokens`` directamente.
+        """
+        from app.models import RefreshToken
+        from app.security import create_refresh_token
+        from sqlalchemy import select
+        from tests.conftest import TestingSessionLocal
+
+        db = TestingSessionLocal()
+        try:
+            for _ in range(6):
+                create_refresh_token(db, test_user)
+            # Tras 6 emisiones con cap=5, debe haber 5 tokens NO
+            # revocados y al menos 1 revocado por el cap.
+            total = db.execute(
+                select(RefreshToken).where(RefreshToken.user_id == test_user.id)
+            ).scalars().all()
+            active = [t for t in total if not t.is_revoked]
+            revoked = [t for t in total if t.is_revoked]
+            assert len(active) == 5, f"Esperaba 5 activos, hay {len(active)}"
+            assert len(revoked) >= 1, f"Esperaba ≥1 revocado por cap, hay {len(revoked)}"
+        finally:
+            db.close()
 
 
 class TestSeguridad:

@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Refresh tokens (R12) — persistidos con estado para soportar
+    # rotación y revocación. El access token sigue siendo un JWT de vida
+    # corta (access_token_expire_minutes); el refresh vive más tiempo y
+    # se rota en cada /auth/refresh.
+    refresh_token_expire_days: int = 30
+    refresh_token_max_per_user: int = 5
+
     # Rate limiting en ``POST /auth/login`` (sliding window por IP).
     # Si se excede ``login_rate_limit_max`` intentos en
     # ``login_rate_limit_window_seconds``, el endpoint devuelve 429.

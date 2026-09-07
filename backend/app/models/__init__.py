@@ -1,4 +1,5 @@
 from app.models.datos_metereologicos import DatosMetereologicos
+from app.models.refresh_token import RefreshToken
 from app.models.tools4milk import (
     Alerta,
     AlertaUmbral,
@@ -58,5 +59,6 @@ __all__ = [
     "LecturaRobotOrdeno",
     "ResumenRelevo",
     # Auth
+    "RefreshToken",
     "Usuario",
 ]

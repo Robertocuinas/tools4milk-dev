@@ -3,7 +3,7 @@ from collections import deque
 from collections.abc import Callable
 from threading import Lock
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models.refresh_token import RefreshToken
 from app.models.usuario import Usuario
 from app.time_utils import utc_now
 
@@ -24,6 +25,13 @@ from app.time_utils import utc_now
 # flag Secure se activa en producción (configurable por env).
 AUTH_COOKIE_NAME = "t4m_token"
 AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 8  # 8 h, alineado con el frontend
+
+# Cookie HttpOnly paralela para el refresh token (R12). La cookie del
+# access tiene el mismo nombre que el legacy ``t4m_token`` para no
+# romper integraciones; el refresh usa un nombre distinto para que el
+# frontend pueda forzar su borrado en logout sin afectar al access
+# vigente. El TTL real lo marca la tabla ``refresh_tokens``.
+REFRESH_COOKIE_NAME = "t4m_refresh"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # auto_error=False deja que get_current_user devuelva 401 cuando falta
@@ -125,6 +133,112 @@ def create_access_token(subject: str, expires_delta: timedelta | None = None) ->
     )
 
 
+def create_refresh_token(
+    db: Session,
+    user: Usuario,
+    emitido_desde_ip: str | None = None,
+) -> str:
+    """Emite un refresh token firmado Y lo persiste en la tabla.
+
+    El JWT lleva un ``jti`` único que también es la clave de búsqueda
+    en ``refresh_tokens``. El TTL es ``settings.refresh_token_expire_days``.
+    Si el usuario ya tiene ``settings.refresh_token_max_per_user`` tokens
+    activos, se revoca el más antiguo antes de emitir el nuevo (límite
+    duro para evitar crecimiento ilimitado).
+    """
+    from sqlalchemy import func
+
+    expires_at = utc_now() + timedelta(days=settings.refresh_token_expire_days)
+    jti = str(uuid4())
+    token = jwt.encode(
+        {
+            "sub": user.username,
+            "type": "refresh",
+            "exp": expires_at,
+            "iat": utc_now(),
+            "jti": jti,
+        },
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+    # Cuenta los tokens activos del usuario (no revocados y no expirados).
+    # SQLite no preserva tz en columnas DateTime(timezone=True), así que
+    # comparamos en UTC naive para ser portable.
+    from datetime import timezone as _tz
+
+    now = utc_now()
+    now_naive = now.replace(tzinfo=None)
+    active_count = db.execute(
+        select(func.count(RefreshToken.id)).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now_naive,
+        )
+    ).scalar_one()
+
+    if active_count >= settings.refresh_token_max_per_user:
+        # Revoca el más antiguo (created_at ASC) hasta que quede hueco.
+        oldest = db.execute(
+            select(RefreshToken)
+            .where(
+                RefreshToken.user_id == user.id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .order_by(RefreshToken.created_at.asc())
+            .limit(active_count - settings.refresh_token_max_per_user + 1)
+        ).scalars().all()
+        for rt in oldest:
+            rt.revoked_at = now
+
+    db.add(
+        RefreshToken(
+            id=uuid4(),
+            user_id=user.id,
+            jti=jti,
+            expires_at=expires_at,
+            emitido_desde_ip=emitido_desde_ip,
+            created_at=now,
+        )
+    )
+    db.commit()
+    return token
+
+
+def decode_refresh_token(token: str) -> dict:
+    """Decodifica y valida un refresh token. Lanza ``JWTError`` si es
+    inválido, expirado, o su claim ``type`` no es ``"refresh"``."""
+    payload = jwt.decode(
+        token,
+        settings.secret_key,
+        algorithms=[settings.algorithm],
+    )
+    if payload.get("type") != "refresh":
+        raise JWTError("Token is not a refresh token")
+    return payload
+
+
+def revoke_all_user_refresh_tokens(db: Session, user_id: UUID) -> int:
+    """Marca como revocados TODOS los refresh tokens activos de un
+    usuario. Se usa en reuse-detection: si alguien presenta un refresh
+    que ya estaba revocado, asumimos compromiso de la sesión y
+    invalidamos todo.
+
+    Devuelve el número de tokens revocados.
+    """
+    now = utc_now()
+    result = db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    ).scalars().all()
+    for rt in result:
+        rt.revoked_at = now
+    db.commit()
+    return len(result)
+
+
 def set_auth_cookie(response, token: str) -> None:
     """Adjunta el JWT a la respuesta como cookie HttpOnly.
 
@@ -146,6 +260,25 @@ def set_auth_cookie(response, token: str) -> None:
 
 def unset_auth_cookie(response) -> None:
     response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+
+
+def set_refresh_cookie(response, token: str) -> None:
+    """Adjunta el refresh token como cookie HttpOnly. El Max-Age es el
+    TTL del refresh (``refresh_token_expire_days``) en segundos."""
+    is_prod = settings.environment.lower() == "production"
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        path="/",
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+    )
+
+
+def unset_refresh_cookie(response) -> None:
+    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/")
 
 
 def _extract_token(
