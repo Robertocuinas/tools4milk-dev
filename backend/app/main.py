@@ -6,8 +6,10 @@ from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s - %(message)s")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from sqlalchemy import inspect, text
 
 from app.config import settings
@@ -214,6 +216,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Headers de seguridad — defensa en profundidad contra XSS, clickjacking
+# y sniffing. Para una API JSON pura son menos críticos que para un HTML
+# server-rendered, pero cuestan cero y cierran vectores residuales
+# (p.ej. si alguien despliega accidentalmente una vista HTML de error).
+#
+# En producción tras un reverse proxy, las mismas cabeceras puede
+# fijarlas nginx — duplicarlas aquí es seguro porque el browser
+# conserva el valor más restrictivo.
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        # CSP estricta: la API no debería servir HTML, pero si lo hace
+        # accidentalmente, ningún script inline puede ejecutarse.
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'",
+        )
+        # HSTS solo en producción (HTTPS obligatorio). En dev se omite
+        # para no romper http://localhost.
+        if settings.environment.lower() == "production":
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/", tags=["Health"])
