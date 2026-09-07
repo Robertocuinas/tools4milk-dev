@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.enums import EstadoAnimal, EstadoTarea
+from app.enums import EstadoAnimal, EstadoTarea, NivelAlerta
 from app.models.tools4milk import Alerta, Animal, TareaEjecucion, TratamientoActivo, Zona
 from app.routers.deps import DbSession
 from app.security import get_current_user
@@ -19,7 +19,7 @@ def dashboard_summary(db: DbSession) -> dict[str, Any]:
         "alertas": {
             "total_pendientes": len(pending_alerts),
             "criticas": 0,
-            "altas": len([a for a in pending_alerts if a.nivel == "alta"]),
+            "altas": len([a for a in pending_alerts if a.nivel == NivelAlerta.ALTA]),
         },
         "tareas": {
             "programadas": db.scalar(select(func.count()).select_from(TareaEjecucion).where(TareaEjecucion.estado == EstadoTarea.PENDIENTE)) or 0,

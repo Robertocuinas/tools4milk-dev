@@ -38,7 +38,7 @@ if str(ROOT) not in sys.path:
 from sqlalchemy import func, select  # noqa: E402
 
 from app.database import SessionLocal  # noqa: E402
-from app.enums import EstadoTarea, NivelAlerta, TipoTurno  # noqa: E402
+from app.enums import EstadoAnimal, EstadoTarea, NivelAlerta, TipoTurno  # noqa: E402
 from app.models.tools4milk import (  # noqa: E402
     Alerta,
     AsignacionTurno,
@@ -228,7 +228,7 @@ def seed_lactaciones(db, today: date) -> None:
     if _count(db, Lactacion) > 0:
         print("SKIP lactaciones (ya hay datos)")
         return
-    vacas = db.scalars(select(Animal).where(Animal.estado == "produccion")).all()
+    vacas = db.scalars(select(Animal).where(Animal.estado == EstadoAnimal.PRODUCCION)).all()
     n = 0
     for animal in vacas:
         numero = RNG.randint(1, 5)
@@ -257,7 +257,7 @@ def seed_tratamientos(db, today: date) -> None:
         print("SKIP tratamientos (ya hay datos)")
         return
     vet = db.scalar(select(Empleado).where(Empleado.rol == "veterinario"))
-    enfermos = db.scalars(select(Animal).where(Animal.estado == "produccion").limit(3)).all()
+    enfermos = db.scalars(select(Animal).where(Animal.estado == EstadoAnimal.PRODUCCION).limit(3)).all()
     farmacos = [
         ("Mastijet", "1 cánula/12h", "intramamaria", 4),
         ("Penethaject", "20 ml/día", "intramuscular", 3),
@@ -289,7 +289,7 @@ def seed_eventos_sanitarios(db, today: date) -> None:
         print("SKIP eventos_sanitarios (ya hay datos)")
         return
     vet = db.scalar(select(Empleado).where(Empleado.rol == "veterinario"))
-    animales = db.scalars(select(Animal).where(Animal.estado == "produccion").limit(5)).all()
+    animales = db.scalars(select(Animal).where(Animal.estado == EstadoAnimal.PRODUCCION).limit(5)).all()
     patologias = ["mastitis", "cojera", "metritis", "cetosis", "otra"]
     for animal, pat in zip(animales, patologias):
         inicio = today - timedelta(days=RNG.randint(5, 40))
@@ -351,7 +351,7 @@ def seed_alertas(db) -> None:
         print("SKIP alertas (ya hay datos)")
         return
     zonas = zonas_por_nombre(db)
-    animales = db.scalars(select(Animal).where(Animal.estado == "produccion").limit(5)).all()
+    animales = db.scalars(select(Animal).where(Animal.estado == EstadoAnimal.PRODUCCION).limit(5)).all()
     plantillas = [
         (NivelAlerta.ALTA, "RCS individual fuera de rango", "Nave"),
         (NivelAlerta.MEDIA, "Tarea de lavado de robot pendiente", "Nave"),
@@ -505,7 +505,7 @@ def seed_boxes(db, today: date) -> None:
         print("SKIP boxes_recria (ya hay datos)")
         return
     terneros = db.scalars(
-        select(Animal).where(Animal.estado == "recria").order_by(Animal.fecha_nacimiento.desc()).limit(6)
+        select(Animal).where(Animal.estado == EstadoAnimal.RECRIA).order_by(Animal.fecha_nacimiento.desc()).limit(6)
     ).all()
     for n in range(1, 9):
         ternero = terneros[n - 1] if n - 1 < len(terneros) else None
