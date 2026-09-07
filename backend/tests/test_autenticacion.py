@@ -373,6 +373,49 @@ class TestRefreshToken:
         r3_after = client.post("/api/v1/auth/refresh", json={"refresh_token": r3})
         assert r3_after.status_code == status.HTTP_401_UNAUTHORIZED
 
+    def test_refresh_via_cookie_sin_body(self, client, test_user, test_user_credentials):
+        """R17 — El frontend puede llamar a /auth/refresh sin body
+        alguno: el backend lee la cookie ``t4m_refresh`` que el navegador
+        adjunta con ``credentials: "include"``.
+
+        Simula el flujo real: el navegador guarda el refresh en la
+        cookie HttpOnly (R8/R12), nunca lo expone a JS, y el frontend
+        hace un POST vacío a /auth/refresh cuando detecta que el
+        access está próximo a expirar.
+        """
+        # Login (deja la cookie t4m_refresh en el jar del TestClient).
+        login = client.post("/api/v1/auth/login", json=test_user_credentials)
+        assert login.status_code == status.HTTP_200_OK
+        old_refresh = login.json()["token"]["refresh_token"]
+        assert old_refresh is not None
+
+        # /auth/refresh SIN body — el backend debe leer la cookie.
+        response = client.post("/api/v1/auth/refresh")
+        assert response.status_code == status.HTTP_200_OK
+        new_refresh = response.json()["refresh_token"]
+        assert new_refresh != old_refresh
+
+    def test_refresh_cookie_precedencia_body(self, client, test_user, test_user_credentials):
+        """Si el body trae un refresh distinto al de la cookie, gana
+        el body (orden de prioridad explícito para tests)."""
+        login = client.post("/api/v1/auth/login", json=test_user_credentials)
+        cookie_refresh = login.json()["token"]["refresh_token"]
+
+        # Body con un refresh inventado (no es JWT válido → 401).
+        # Si el backend hubiera leído la cookie, este caso habría
+        # rotado con éxito; al ganar el body, el endpoint rechaza.
+        response = client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "no-es-jwt"},
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+        # La cookie sigue intacta y el refresh sigue siendo válido
+        # para una siguiente llamada limpia.
+        response_ok = client.post("/api/v1/auth/refresh")
+        assert response_ok.status_code == status.HTTP_200_OK
+        assert response_ok.json()["refresh_token"] != cookie_refresh
+
     def test_refresh_max_per_user_revoca_mas_antiguo(self, client, test_user, test_user_credentials):
         """Si el usuario supera ``refresh_token_max_per_user`` (5 por
         defecto), el refresh más antiguo se revoca al emitir uno nuevo.

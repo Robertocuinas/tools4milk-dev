@@ -196,8 +196,42 @@ Las últimas tandas de remediaciones aplicadas están en el log de
 git. Los prefijos siguen la convención:
 
 - `feat:` — nueva funcionalidad (R1, R2, R3, R5, R6, R8, R9, R10,
-  R11, R12, R15).
+  R11, R12, R15, R17).
 - `fix:` — bugfix.
 - `refactor:` — cambio interno sin cambio de comportamiento.
 - `test:` — solo tests.
 - `chore:` — limpieza, dependencias, docs.
+
+## 11. Flujo de refresh desde el frontend (R17)
+
+El navegador del usuario lleva DOS cookies HttpOnly tras el login:
+
+- `t4m_token` — access token de 60 min. Se adjunta en cada fetch.
+- `t4m_refresh` — refresh token de 30 días. Se adjunta en cada fetch.
+
+El frontend (`lib/api.ts`) usa `credentials: "include"` en todos
+los fetch, así que el navegador adjunta AMBAS cookies automáticamente.
+Ningún código JavaScript tiene acceso al token (mismas garantías
+anti-XSS que R8).
+
+Para renovar la sesión cuando el access está próximo a expirar, el
+frontend hace:
+
+```ts
+await fetch("/api/v1/auth/refresh", {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({}),  // body vacío
+});
+```
+
+El backend lee el refresh de la cookie (orden de prioridad: body >
+cookie), lo rota, y devuelve el par nuevo en el body + re-emite
+ambas cookies. El navegador sustituye automáticamente las cookies
+con los valores nuevos.
+
+Si el frontend prefiere no manejar el body vacío, también funciona
+**sin body alguno** (el backend leerá solo de la cookie). Ver
+`test_refresh_via_cookie_sin_body` y `test_refresh_cookie_precedencia_body`
+en `backend/tests/test_autenticacion.py`.
