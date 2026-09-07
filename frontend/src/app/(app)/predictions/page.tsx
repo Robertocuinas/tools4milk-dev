@@ -330,10 +330,23 @@ export default function PredictionsPage() {
           ))}
         </div>
 
-        <div className="rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info">
-          Estimaciones calculadas mediante heurísticas aritméticas (no modelos de machine learning).
-          La composición de leche (grasa/proteína) aún no se calcula y se muestra como «n/d».
-          Horizonte orientativo de 7 días; las recomendaciones no sustituyen el criterio veterinario.
+        {/*
+          Banner explícito de transparencia: las predicciones son heurísticas
+          aritméticas, no un modelo ML. Se muestra siempre que la página está
+          abierta (incluso si no hay predicciones cargadas todavía) para que
+          el operario no confunda un número con una proyección entrenada.
+        */}
+        <div
+          role="note"
+          className="flex items-start gap-2 rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info"
+        >
+          <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div>
+            Estimaciones calculadas mediante <strong>heurísticas aritméticas</strong>{" "}
+            (no modelos de machine learning). La composición de leche (grasa/proteína) aún
+            no se calcula y se muestra como «n/d». Horizonte orientativo de 7 días; las
+            recomendaciones no sustituyen el criterio veterinario.
+          </div>
         </div>
 
         {stats.loaded > 0 && (
