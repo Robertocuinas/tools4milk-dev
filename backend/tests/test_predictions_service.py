@@ -18,9 +18,9 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 
-from app.enums import EstadoAnimal, EstadoTarea
 from app.models.tools4milk import (
     Alerta,
+    Animal,
     Lactacion,
     NivelAlerta,
     TratamientoActivo,
@@ -155,17 +155,21 @@ class TestComputePrediction:
 
     def test_animal_id_se_preserva_en_payload(self, db):
         """El animal_id del input aparece en el payload final (id o crotal)."""
-        animal = _make_animal(db, crotal="ES-CROTAL-99")
+        _make_animal(db, crotal="ES-CROTAL-99")
+        db.commit()
+        result_animal = db.execute(
+            select(Animal).where(Animal.crotal_oficial == "ES-CROTAL-99")
+        ).scalar_one()
+        result_animal.estado_reproductivo = "confirmada_gestante"
         db.commit()
 
-        result = predictions_service.compute_prediction(db, animal)
-        assert result["animal_id"] == str(animal.id)
+        result = predictions_service.compute_prediction(db, result_animal)
+        assert result["animal_id"] == str(result_animal.id)
 
     def test_get_animal_or_none_acepta_uuid_o_crotal(self, db):
         """get_animal_or_none resuelve por UUID o por crotal_oficial."""
         animal = _make_animal(db, crotal="ES-DOBLE-LOOKUP")
         db.commit()
-
         by_uuid = predictions_service.get_animal_or_none(db, str(animal.id))
         by_crotal = predictions_service.get_animal_or_none(db, "ES-DOBLE-LOOKUP")
         assert by_uuid is not None

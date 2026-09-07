@@ -194,8 +194,8 @@ def ensure_operational_seed() -> None:
                 sexo="hembra",
                 fecha_nacimiento=date(2021, 1, 1),
                 raza="frisona",
-                estado="lactante",
-                estado_reproductivo="lactante",
+                estado="recria",
+                estado_reproductivo="vacia",
                 fecha_entrada=date(2021, 1, 1),
             )
             db.add(animal)
@@ -211,7 +211,7 @@ def ensure_operational_seed() -> None:
                 fecha_nacimiento=date(2020, 4, 12),
                 raza="frisona",
                 estado="produccion",
-                estado_reproductivo="lactante",
+                estado_reproductivo="confirmada_gestante",
                 fecha_entrada=date(2020, 4, 12),
             )
             db.add(frontend_animal)
