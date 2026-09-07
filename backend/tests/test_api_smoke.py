@@ -45,8 +45,9 @@ def test_alerts_smoke_flow(client, auth_headers):
 
 
 def test_frontend_core_requires_authentication(client):
+    """Las rutas /api/v1/* deben rechazar a clientes sin token. Esperado: 401."""
     response = client.get("/api/v1/dashboard/summary")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_role_restrictions_for_sensitive_mutations(client, operario_headers):

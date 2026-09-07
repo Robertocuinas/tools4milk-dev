@@ -154,10 +154,13 @@ class TestGetMe:
         assert data["activo"] is True
 
     def test_get_me_sin_autenticacion(self, client):
-        """Prueba obtener usuario actual sin token"""
+        """Prueba obtener usuario actual sin token.
+
+        Esperado: 401 cuando falta Authorization o la cookie.
+        """
         response = client.get("/api/v1/auth/me")
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_get_me_token_invalido(self, client):
         """Prueba obtener usuario actual con token inválido"""
@@ -169,7 +172,10 @@ class TestGetMe:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_get_me_formato_header_invalido(self, client, test_user, test_user_credentials):
-        """Prueba obtener usuario actual con formato de Authorization inválido"""
+        """Prueba obtener usuario actual con formato de Authorization inválido.
+
+        Esperado: 401 (HTTPBearer no reconoce el header sin 'Bearer').
+        """
         login_response = client.post(
             "/api/v1/auth/login",
             json=test_user_credentials
@@ -182,7 +188,7 @@ class TestGetMe:
             headers={"Authorization": token}
         )
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 class TestRefreshToken:
@@ -213,10 +219,10 @@ class TestRefreshToken:
         assert data["expires_in"] > 0
 
     def test_refresh_token_sin_autenticacion(self, client):
-        """Prueba refrescar token sin autenticación"""
+        """Prueba refrescar token sin autenticación. Esperado: 401."""
         response = client.post("/api/v1/auth/refresh")
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_refresh_token_invalido(self, client):
         """Prueba refrescar token inválido"""
