@@ -1,4 +1,7 @@
-import { API_BASE_URL, API_V1_URL, TOKEN_STORAGE_KEY } from "@/lib/config";
+import { API_BASE_URL, API_V1_URL } from "@/lib/config";
+// TOKEN_STORAGE_KEY ya no se usa aquí: el JWT viaja en una cookie HttpOnly que
+// el navegador adjunta automáticamente. `credentials: "include"` garantiza que
+// la cookie llegue al backend incluso en cross-origin (desarrollo).
 import type {
   Alert,
   AlertState,
@@ -42,11 +45,6 @@ import type {
 
 type QueryParams = Record<string, string | number | boolean | null | undefined>;
 
-function getToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-}
-
 function buildUrl(path: string, params?: QueryParams): string {
   const base = path.startsWith("/api") || path === "/health" ? API_BASE_URL : API_V1_URL;
   const fullPath = `${base}${path}`;
@@ -56,13 +54,16 @@ function buildUrl(path: string, params?: QueryParams): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}, params?: QueryParams): Promise<T> {
-  const token = getToken();
+  // El token JWT vive en una cookie HttpOnly (Set-Cookie del backend).
+  // El navegador la adjunta automáticamente cuando ``credentials: "include"``
+  // está presente en el fetch. NO añadimos ``Authorization: *** — sería
+  // redundante y expone el token en DevTools para cualquier XSS.
   const url = buildUrl(path, params);
   const response = await fetch(url, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
   }).catch(() => {
