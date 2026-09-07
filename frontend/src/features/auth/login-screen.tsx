@@ -14,6 +14,10 @@ import { api } from "@/lib/api";
 import type { UserRole } from "@/lib/types";
 import { useAppStore } from "@/store/app-store";
 
+// En producción NUNCA autocompletamos credenciales (incluso las de demo).
+// El listado completo (incluyendo "admin") sólo aparece en desarrollo.
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 const roles: {
   value: UserRole;
   label: string;
@@ -25,13 +29,23 @@ const roles: {
   { value: "alimentacion", label: "Responsable alimentación", short: "Nutrición", Icon: Sprout },
 ];
 
-const demoUsers = [
-  { username: "admin", role: "admin" as const, label: "Administrador", password: "testpass123" },
-  { username: "roberto.castro", role: "admin" as const, label: "Gestor", password: "testpass123" },
-  { username: "operario.zona", role: "operario" as const, label: "Sala ordeño", password: "testpass123" },
-  { username: "laura.fernandez", role: "alimentacion" as const, label: "Alimentación", password: "testpass123" },
-  { username: "dr.mendez", role: "veterinario" as const, label: "Veterinario", password: "testpass123" },
-];
+type DemoUser = {
+  username: string;
+  role: UserRole;
+  label: string;
+  password: string;
+};
+
+// Solo se carga la lista con contraseñas reales en entorno de desarrollo.
+const demoUsers: DemoUser[] = IS_DEV
+  ? [
+      { username: "admin", role: "admin", label: "Administrador", password: "testpass123" },
+      { username: "roberto.castro", role: "admin", label: "Gestor", password: "testpass123" },
+      { username: "operario.zona", role: "operario", label: "Sala ordeño", password: "testpass123" },
+      { username: "laura.fernandez", role: "alimentacion", label: "Alimentación", password: "testpass123" },
+      { username: "dr.mendez", role: "veterinario", label: "Veterinario", password: "testpass123" },
+    ]
+  : [];
 
 function StatusDot({ online, loading = false }: { online: boolean; loading?: boolean }) {
   return (
@@ -240,32 +254,35 @@ export function LoginScreen() {
               </button>
             </form>
 
-            {/* Demo access */}
-            <div className="mt-8 rounded-2xl border-2 border-[#d0e8d8] bg-white p-5">
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-[#2f6f45]">
-                Accesos de prueba
-              </h3>
-              <p className="mb-4 text-xs text-[#7a9b8a]">
-                Selecciona un usuario para rellenar automáticamente.
-              </p>
-              <div className="space-y-2">
-                {demoUsers.slice(1, 4).map((demo) => (
-                  <button
-                    key={demo.username}
-                    type="button"
-                    onClick={() => {
-                      setUsername(demo.username);
-                      setPassword(demo.password);
-                      setSelectedRole(demo.role);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition hover:bg-[#f0f8f4]"
-                  >
-                    <span className="font-mono text-sm font-semibold text-[#1f5a35]">{demo.username}</span>
-                    <span className="text-xs text-[#7a9b8a]">{demo.label}</span>
-                  </button>
-                ))}
+            {/* Demo access — only renders in development to avoid shipping
+                demo credentials into production builds. */}
+            {IS_DEV && (
+              <div className="mt-8 rounded-2xl border-2 border-[#d0e8d8] bg-white p-5">
+                <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-[#2f6f45]">
+                  Accesos de prueba
+                </h3>
+                <p className="mb-4 text-xs text-[#7a9b8a]">
+                  Selecciona un usuario para rellenar automáticamente.
+                </p>
+                <div className="space-y-2">
+                  {demoUsers.slice(1, 4).map((demo) => (
+                    <button
+                      key={demo.username}
+                      type="button"
+                      onClick={() => {
+                        setUsername(demo.username);
+                        setPassword(demo.password);
+                        setSelectedRole(demo.role);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition hover:bg-[#f0f8f4]"
+                    >
+                      <span className="font-mono text-sm font-semibold text-[#1f5a35]">{demo.username}</span>
+                      <span className="text-xs text-[#7a9b8a]">{demo.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Backend status — small indicator */}
             <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#7a9b8a]">
