@@ -5,11 +5,15 @@ Prueba:
 - POST /api/v1/auth/login: Autenticación de usuario
 - GET /api/v1/auth/me: Obtener usuario actual
 - POST /api/v1/auth/refresh: Refrescar token
+- POST /api/v1/auth/logout: Borrar la cookie HttpOnly
 """
 
 import pytest
 from fastapi import status
+from fastapi.testclient import TestClient
 import json
+
+from app.main import app
 
 
 class TestLogin:
@@ -172,9 +176,12 @@ class TestGetMe:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_get_me_formato_header_invalido(self, client, test_user, test_user_credentials):
-        """Prueba obtener usuario actual con formato de Authorization inválido.
+        """Prueba que un header Authorization sin esquema 'Bearer' se ignora.
 
-        Esperado: 401 (HTTPBearer no reconoce el header sin 'Bearer').
+        Con R8 (cookie HttpOnly) el orden de prioridad es: cookie > header.
+        Si la cookie no está, el header sin 'Bearer' se trata como ausente
+        y se devuelve 401. Si la cookie sí está, se usa la cookie y se
+        ignora el header malformado (200).
         """
         login_response = client.post(
             "/api/v1/auth/login",
@@ -182,13 +189,79 @@ class TestGetMe:
         )
         token = login_response.json()["token"]["access_token"]
 
-        # Sin "Bearer" prefix
-        response = client.get(
+        # Sin "Bearer" prefix: HTTPBearer no extrae credenciales -> cae a
+        # la cookie, que está presente tras el login -> 200 OK.
+        response_with_cookie = client.get(
             "/api/v1/auth/me",
             headers={"Authorization": token}
         )
+        assert response_with_cookie.status_code == status.HTTP_200_OK
 
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        # Cliente SIN cookie previa: el header malformado equivale a "no
+        # autenticado" -> 401.
+        fresh_client = TestClient(app)
+        response_no_cookie = fresh_client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": token}
+        )
+        assert response_no_cookie.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_login_emite_cookie_httponly(self, client, test_user, test_user_credentials):
+        """R8 — POST /auth/login debe emitir cookie HttpOnly + SameSite=Lax.
+
+        Verifica los flags de seguridad de ``set_auth_cookie``:
+        - ``httponly=True``: JavaScript no puede leerla (mitiga XSS).
+        - ``samesite="lax"``: protección CSRF básica para GET cross-site.
+        - ``max-age`` > 0: la cookie expira (no es de sesión).
+        El flag ``Secure`` se omite en dev (``environment != production``)
+        para que la cookie funcione sobre http://localhost.
+        """
+        response = client.post("/api/v1/auth/login", json=test_user_credentials)
+        assert response.status_code == status.HTTP_200_OK
+
+        set_cookie = response.headers.get("set-cookie", "")
+        assert "t4m_token=" in set_cookie, f"Cookie de sesión no emitida: {set_cookie!r}"
+        assert "HttpOnly" in set_cookie, f"Cookie sin flag HttpOnly: {set_cookie!r}"
+        # FastAPI normaliza el value a minúsculas (``samesite="lax"`` se
+        # serializa como ``SameSite=lax``). Hacemos la búsqueda case-insensitive.
+        assert "samesite=lax" in set_cookie.lower(), f"Cookie sin SameSite=Lax: {set_cookie!r}"
+        # max-age > 0 (en segundos; 8h = 28800).
+        import re
+        match = re.search(r"Max-Age=(\d+)", set_cookie)
+        assert match is not None, f"Cookie sin Max-Age: {set_cookie!r}"
+        assert int(match.group(1)) > 0
+
+    def test_auth_me_con_solo_cookie_sin_header(self, client, test_user, test_user_credentials):
+        """R8 — Tras login, ``/auth/me`` funciona con la cookie sola.
+
+        Simula el flujo del navegador: el frontend nunca envía
+        ``Authorization``, solo deja que el navegador adjunte la cookie
+        HttpOnly. El backend debe aceptarla y devolver 200.
+        """
+        # Login (setea la cookie en el TestClient).
+        login_response = client.post("/api/v1/auth/login", json=test_user_credentials)
+        assert login_response.status_code == status.HTTP_200_OK
+        assert "t4m_token=" in login_response.headers.get("set-cookie", "")
+
+        # Llamada SIN header Authorization — el TestClient reenvía la
+        # cookie automáticamente porque comparte el jar entre requests.
+        me_response = client.get("/api/v1/auth/me")
+        assert me_response.status_code == status.HTTP_200_OK
+        assert me_response.json()["username"] == test_user_credentials["username"]
+
+    def test_logout_borra_cookie_httponly(self, client, test_user, test_user_credentials):
+        """R8 — POST /auth/logout debe devolver Set-Cookie con max-age=0
+        para que el navegador borre la cookie HttpOnly del cliente."""
+        # Login previo
+        client.post("/api/v1/auth/login", json=test_user_credentials)
+
+        response = client.post("/api/v1/auth/logout")
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        set_cookie = response.headers.get("set-cookie", "")
+        # El header de borrado usa Max-Age=0 y el mismo nombre.
+        assert "t4m_token=" in set_cookie, f"Logout no borró la cookie: {set_cookie!r}"
+        assert "Max-Age=0" in set_cookie, f"Cookie de logout sin Max-Age=0: {set_cookie!r}"
 
 
 class TestRefreshToken:
