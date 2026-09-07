@@ -196,42 +196,56 @@ Las últimas tandas de remediaciones aplicadas están en el log de
 git. Los prefijos siguen la convención:
 
 - `feat:` — nueva funcionalidad (R1, R2, R3, R5, R6, R8, R9, R10,
-  R11, R12, R15, R17).
+  R11, R12, R15, R17, R18).
 - `fix:` — bugfix.
 - `refactor:` — cambio interno sin cambio de comportamiento.
 - `test:` — solo tests.
-- `chore:` — limpieza, dependencias, docs.
+- `chore:` — limpieza, dependencias, docs (R16, R22).
 
-## 11. Flujo de refresh desde el frontend (R17)
+### Backlog diferido (no crítico para MVP)
+
+- **R13 / UI de audit log** — el endpoint `GET /api/v1/audit-log` y
+  la página `frontend/src/app/(app)/audit-log/page.tsx` ya están
+  implementados (filtros, KPIs, expand row, AccessDenied).
+- **R14 / R20 / Tests E2E con Playwright** — la cobertura actual
+  (64 tests pytest, 0 lint errors, 0 tsc errors) cubre la lógica
+  de negocio. Un E2E con browser real añadiría confianza marginal
+  en regresiones visuales a costa de: descargar Chromium en CI
+  (~150 MB), orquestar `uvicorn` + `next dev`, esperar el arranque.
+  No implementado — añadir solo si se detectan regresiones de UI
+  no cubiertas por unit tests.
+- **Doble-llave para rotación de SECRET_KEY sin logout forzado** —
+  solo si el sistema pasa a producción con usuarios activos y se
+  necesita rotación de secreto sin interrupciones.
+
+## 11. Flujo de refresh desde el frontend (R17 + R18)
 
 El navegador del usuario lleva DOS cookies HttpOnly tras el login:
 
 - `t4m_token` — access token de 60 min. Se adjunta en cada fetch.
 - `t4m_refresh` — refresh token de 30 días. Se adjunta en cada fetch.
+  Lleva `SameSite=Strict` (R22) para máxima protección CSRF.
 
 El frontend (`lib/api.ts`) usa `credentials: "include"` en todos
 los fetch, así que el navegador adjunta AMBAS cookies automáticamente.
 Ningún código JavaScript tiene acceso al token (mismas garantías
 anti-XSS que R8).
 
-Para renovar la sesión cuando el access está próximo a expirar, el
-frontend hace:
+Hay dos mecanismos que mantienen la sesión viva sin que el usuario
+tenga que hacer nada:
 
-```ts
-await fetch("/api/v1/auth/refresh", {
-  method: "POST",
-  credentials: "include",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({}),  // body vacío
-});
-```
+1. **Proactivo** — `<SessionKeeper />` (en `app/(app)/layout.tsx`)
+   llama a `POST /auth/refresh` cada **50 minutos** (10 min antes de
+   que el access caduque a los 60). El usuario nunca nota el corte.
 
-El backend lee el refresh de la cookie (orden de prioridad: body >
-cookie), lo rota, y devuelve el par nuevo en el body + re-emite
-ambas cookies. El navegador sustituye automáticamente las cookies
-con los valores nuevos.
+2. **Reactivo** — el `request()` de `lib/api.ts` intercepta un 401
+   y, salvo en endpoints de auth, llama una vez a `POST /auth/refresh`
+   y reintenta la petición. Coalescing: si dos llamadas fallan con
+   401 a la vez, solo se dispara un refresh; las demás esperan la
+   misma promesa. Timeout: 8s.
 
-Si el frontend prefiere no manejar el body vacío, también funciona
-**sin body alguno** (el backend leerá solo de la cookie). Ver
-`test_refresh_via_cookie_sin_body` y `test_refresh_cookie_precedencia_body`
-en `backend/tests/test_autenticacion.py`.
+Si el refresh falla definitivamente (reuse detection, refresh
+caducado, etc.), `onSessionExpired` limpia el store y el layout
+redirige a `/login`. El `proxy.ts` actúa como red de seguridad
+adicional: si la cookie de access no está presente, redirige sin
+necesidad de consultar al backend.
