@@ -30,11 +30,46 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.enums import EstadoTarea, EstadoAnimal, EstadoIncidencia, NivelAlerta, NivelSeveridad, TipoTurno, TipoIncidencia
+from app.enums import (
+    EstadoAnimal,
+    EstadoIncidencia,
+    EstadoPedido,
+    EstadoReproductivo,
+    EstadoTarea,
+    NivelAlerta,
+    NivelSeveridad,
+    RolEmpleado,
+    SexoAnimal,
+    TipoEventoRepro,
+    TipoIncidencia,
+    TipoMaquinaria,
+    TipoPatologia,
+    TipoTurno,
+)
 
 
 POSTGRES_JSON = JSONB().with_variant(JSON(), "sqlite")
 POSTGRES_TEXT_ARRAY = ARRAY(Text).with_variant(JSON(), "sqlite")
+
+
+def _enum_col(python_enum, pg_name: str, sqlite_length: int = 40):
+    """Helper para columnas que son ENUM nativo en Postgres pero texto
+    en SQLite (donde los enums nativos no existen).
+
+    En Postgres produce un tipo ``<pg_name>`` con los valores del
+    ``python_enum`` (ordenados por definición). En SQLite, produce un
+    VARCHAR(<sqlite_length>) que SQLAlchemy convierte transparentemente.
+
+    Esto evita el bug "column X is of type Y but expression is of
+    type character varying" que aparece cuando SQLAlchemy manda un
+    string y la columna de la BD es un ENUM nativo.
+    """
+    return Enum(
+        python_enum,
+        name=pg_name,
+        values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        native_enum=True,
+    ).with_variant(String(sqlite_length), "sqlite")
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +97,10 @@ class Empleado(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
     apellidos: Mapped[str] = mapped_column(String(150), nullable=False)
-    rol: Mapped[str] = mapped_column(String(40), nullable=False)
+    rol: Mapped[RolEmpleado] = mapped_column(
+        _enum_col(RolEmpleado, "rol_empleado"),
+        nullable=False,
+    )
     zona_principal_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zonas.id", ondelete="SET NULL"))
     cualificaciones: Mapped[list[str] | None] = mapped_column(POSTGRES_TEXT_ARRAY, default=list)
     telefono: Mapped[str | None] = mapped_column(String(20))
@@ -81,7 +119,10 @@ class Maquinaria(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
-    tipo: Mapped[str] = mapped_column(String(40), nullable=False)
+    tipo: Mapped[TipoMaquinaria] = mapped_column(
+        _enum_col(TipoMaquinaria, "tipo_maquinaria"),
+        nullable=False,
+    )
     zona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zonas.id", ondelete="SET NULL"))
     marca: Mapped[str | None] = mapped_column(String(100))
     modelo: Mapped[str | None] = mapped_column(String(100))
@@ -104,7 +145,11 @@ class Animal(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     crotal_oficial: Mapped[str] = mapped_column(String(20), nullable=False, unique=True, index=True)
     nombre: Mapped[str | None] = mapped_column(String(80))
-    sexo: Mapped[str] = mapped_column(String(20), nullable=False, default="hembra")
+    sexo: Mapped[SexoAnimal] = mapped_column(
+        _enum_col(SexoAnimal, "sexo_animal", sqlite_length=20),
+        nullable=False,
+        default=SexoAnimal.HEMBRA,
+    )
     fecha_nacimiento: Mapped[date] = mapped_column(Date, nullable=False)
     raza: Mapped[str | None] = mapped_column(String(80))
     estado: Mapped[EstadoAnimal] = mapped_column(
@@ -113,7 +158,11 @@ class Animal(Base):
         default=EstadoAnimal.RECRIA,
         index=True,
     )
-    estado_reproductivo: Mapped[str | None] = mapped_column(String(40), index=True)
+    estado_reproductivo: Mapped[EstadoReproductivo | None] = mapped_column(
+        _enum_col(EstadoReproductivo, "estado_reproductivo"),
+        nullable=True,
+        index=True,
+    )
     madre_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("animales.id"))
     zona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zonas.id", ondelete="SET NULL"), index=True)
     fecha_entrada: Mapped[date] = mapped_column(Date, nullable=False)
@@ -178,7 +227,10 @@ class EventoSanitario(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     animal_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("animales.id"), nullable=False, index=True)
-    tipo_patologia: Mapped[str] = mapped_column(String(50), nullable=False)
+    tipo_patologia: Mapped[TipoPatologia] = mapped_column(
+        _enum_col(TipoPatologia, "tipo_patologia"),
+        nullable=False,
+    )
     fecha_inicio: Mapped[date] = mapped_column(Date, nullable=False)
     fecha_fin: Mapped[date | None] = mapped_column(Date)
     tratamiento: Mapped[str | None] = mapped_column(Text)
@@ -245,7 +297,10 @@ class AlertaUmbral(Base):
     operador: Mapped[str] = mapped_column(String(10), nullable=False)
     valor_umbral: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unidad: Mapped[str | None] = mapped_column(String(30))
-    nivel_alerta: Mapped[str] = mapped_column(String(20), nullable=False)
+    nivel_alerta: Mapped[NivelAlerta] = mapped_column(
+        _enum_col(NivelAlerta, "nivel_alerta", sqlite_length=20),
+        nullable=False,
+    )
     push_whatsapp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     pantalla_tv: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     tablet: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -389,7 +444,11 @@ class Pedido(Base):
     descripcion: Mapped[str | None] = mapped_column(Text)
     cantidad: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unidad: Mapped[str | None] = mapped_column(String(30))
-    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="solicitado", index=True)
+    estado: Mapped[EstadoPedido] = mapped_column(
+        _enum_col(EstadoPedido, "estado_pedido"),
+        nullable=False,
+        default=EstadoPedido.SOLICITADO,
+    )
     solicitante_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("empleados.id"))
     ts_solicitud: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ts_aprobacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -486,7 +545,10 @@ class EventoReproductivo(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     animal_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("animales.id"), nullable=False, index=True)
-    tipo: Mapped[str] = mapped_column(String(50), nullable=False)
+    tipo: Mapped[TipoEventoRepro] = mapped_column(
+        _enum_col(TipoEventoRepro, "tipo_evento_repro"),
+        nullable=False,
+    )
     fecha: Mapped[date] = mapped_column(Date, nullable=False)
     hora: Mapped[time | None] = mapped_column(Time)
     empleado_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("empleados.id"))
