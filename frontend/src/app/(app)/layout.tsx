@@ -27,6 +27,7 @@ import type { Capability } from "@/lib/role-capabilities";
 import { roleDisplayName } from "@/lib/role-capabilities";
 import { useActiveWorkerStore } from "@/lib/active-worker-store";
 import { usePermissions } from "@/lib/use-permissions";
+import { SessionKeeper } from "@/components/providers/session-keeper";
 import { useAppStore } from "@/store/app-store";
 
 type NavItem = {
@@ -133,6 +134,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-app-bg font-body text-app-text">
+      {/* Mantiene la sesión viva: rota el access cada 50 min y maneja
+          la expiración (refreshSession fallido → store limpio + redirect). */}
+      <SessionKeeper />
       {/* ── Sidebar ── */}
       <aside className="flex w-56 shrink-0 flex-col border-r border-[#1e3a26] bg-[#0d1a10]">
         {/* Logo */}

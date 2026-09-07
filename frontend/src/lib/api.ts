@@ -45,6 +45,40 @@ import type {
 
 type QueryParams = Record<string, string | number | boolean | null | undefined>;
 
+// Endpoints de auth que NO deben disparar el interceptor 401-refresh.
+// Si los interceptáramos, un 401 en /auth/login (credenciales
+// incorrectas) intentaría refrescar la sesión, que fallaría igual,
+// y devolvería un error distinto al real.
+const AUTH_BYPASS_PATHS = new Set(["/auth/login", "/auth/refresh", "/auth/logout"]);
+
+// Estado compartido por todas las llamadas a ``request()`` para evitar
+// que dos 401 en paralelo disparen dos /auth/refresh simultáneos.
+// Mientras una rotación está en curso, las demás llamadas esperan a
+// que termine (con un timeout corto) y reintentan una vez.
+let refreshInFlight: Promise<void> | null = null;
+const REFRESH_TIMEOUT_MS = 8000;
+
+// Listeners a los que ``request()`` avisa cuando una rotación de
+// sesión falla definitivamente. El layout (app/(app)/layout.tsx)
+// se suscribe para limpiar el store y redirigir a /login.
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
+}
+
+function emitSessionExpired() {
+  for (const listener of sessionExpiredListeners) {
+    try {
+      listener();
+    } catch {
+      // Un listener que falla no debe impedir que los demás se enteren.
+    }
+  }
+}
+
 function buildUrl(path: string, params?: QueryParams): string {
   const base = path.startsWith("/api") || path === "/health" ? API_BASE_URL : API_V1_URL;
   const fullPath = `${base}${path}`;
@@ -53,25 +87,95 @@ function buildUrl(path: string, params?: QueryParams): string {
   return `${fullPath}?${new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString()}`;
 }
 
+/**
+ * Llama a ``POST /auth/refresh`` con la cookie t4m_refresh (que el
+ * navegador adjunta automáticamente con ``credentials: "include"``).
+ * El backend rota el par y re-emite las cookies. Si la cookie
+ * está caducada o fue reusada (reuse detection), rechaza con 401.
+ *
+ * Coalesce llamadas concurrentes: si ya hay un refresh en vuelo,
+ * devuelve la misma promesa en lugar de lanzar otra.
+ */
+async function refreshSession(): Promise<boolean> {
+  if (refreshInFlight) {
+    return refreshInFlight.then(() => true).catch(() => false);
+  }
+
+  const url = `${API_V1_URL}/auth/refresh`;
+  refreshInFlight = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        // Refresh caducado, reuse detection, o sesión ya invalidada.
+        // El navegador mantiene la cookie caducada hasta que el
+        // backend emita Set-Cookie Max-Age=0; el siguiente /auth/me
+        // verá 401 y el layout redirigirá.
+        emitSessionExpired();
+        throw new Error(`Refresh failed: ${response.status}`);
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      // Error de red o timeout — no matamos la sesión; el siguiente
+      // intento del usuario (o el timer proactivo) lo reintentará.
+      throw err;
+    }
+  })();
+
+  try {
+    await refreshInFlight;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, params?: QueryParams): Promise<T> {
   // El token JWT vive en una cookie HttpOnly (Set-Cookie del backend).
   // El navegador la adjunta automáticamente cuando ``credentials: "include"``
   // está presente en el fetch. NO añadimos ``Authorization: *** — sería
   // redundante y expone el token en DevTools para cualquier XSS.
   const url = buildUrl(path, params);
-  const response = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers,
-    },
-  }).catch(() => {
+
+  const doFetch = () =>
+    fetch(url, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...init.headers,
+      },
+    });
+
+  let response = await doFetch().catch(() => {
     if (process.env.NODE_ENV === "development") {
       console.error(`[api] sin conexión: ${init.method ?? "GET"} ${url}`);
     }
     throw new Error("No se puede conectar con el servidor. Verifica que el backend esté activo.");
   });
+
+  // Interceptor 401: si la cookie de access está caducada pero el
+  // refresh sigue vivo, rotamos y reintentamos UNA vez. Evita que el
+  // usuario tenga que re-loguear en medio de una sesión de 8h.
+  // Excluimos los endpoints de auth para no enmascarar errores reales.
+  if (response.status === 401 && !AUTH_BYPASS_PATHS.has(path)) {
+    const rotated = await refreshSession();
+    if (rotated) {
+      response = await doFetch().catch(() => {
+        throw new Error("No se puede conectar con el servidor.");
+      });
+    }
+  }
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
@@ -87,6 +191,8 @@ async function request<T>(path: string, init: RequestInit = {}, params?: QueryPa
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
+
+export { refreshSession };
 
 export const api = {
   health() {
