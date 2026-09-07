@@ -264,6 +264,44 @@ class TestGetMe:
         assert "Max-Age=0" in set_cookie, f"Cookie de logout sin Max-Age=0: {set_cookie!r}"
 
 
+class TestLoginRateLimit:
+    """Tests del rate limiter de ``POST /auth/login``.
+
+    El limiter se resetea automáticamente entre tests vía el fixture
+    autouse ``_reset_login_rate_limiter`` definido en este módulo.
+    """
+
+    def test_login_rate_limit_devuelve_429_despues_de_max_intentos(
+        self, client, test_user
+    ):
+        """Tras ``login_rate_limit_max`` intentos (fallidos), el siguiente
+        intento — incluso con credenciales correctas — devuelve 429 con
+        header ``Retry-After``."""
+        # Llenamos la cuota con credenciales inválidas (>=8 chars para
+        # superar la validación de ``LoginRequest.password``).
+        bad = {"username": test_user.username, "password": "wrongpass"}
+        for _ in range(5):
+            r = client.post("/api/v1/auth/login", json=bad)
+            assert r.status_code == status.HTTP_401_UNAUTHORIZED
+
+        # El sexto intento debe estar bloqueado, incluso con la contraseña
+        # correcta (el limiter corta antes de validar credenciales).
+        good = {"username": test_user.username, "password": "testpass123"}
+        r = client.post("/api/v1/auth/login", json=good)
+        assert r.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert "Retry-After" in r.headers
+        assert int(r.headers["Retry-After"]) > 0
+        assert "Demasiados intentos" in r.json()["detail"]
+
+    def test_login_rate_limit_es_per_ip(self, client, test_user):
+        """El limiter cuenta por IP. La cuota del test anterior (con el
+        mismo TestClient) debe estar vacía al inicio de este test gracias
+        al fixture autouse; lo verificamos haciendo un login válido."""
+        good = {"username": test_user.username, "password": "testpass123"}
+        r = client.post("/api/v1/auth/login", json=good)
+        assert r.status_code == status.HTTP_200_OK
+
+
 class TestRefreshToken:
     """Tests para el endpoint POST /auth/refresh"""
 

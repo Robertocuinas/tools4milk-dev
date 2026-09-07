@@ -10,9 +10,22 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.security import login_rate_limiter
+
 os.environ["REDIS_ENABLED"] = "False"
 os.environ["AEMET_API_KEY"] = ""
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_rate_limiter():
+    """El limiter de ``POST /auth/login`` es un singleton en memoria;
+    reseteamos su estado entre tests para que un test no condicione al
+    siguiente. El bloqueo real contra fuerza bruta sigue activo en
+    producción (con los valores por defecto: 5 intentos / 60s por IP)."""
+    login_rate_limiter.reset()
+    yield
+    login_rate_limiter.reset()
 
 from app.time_utils import utc_now
 

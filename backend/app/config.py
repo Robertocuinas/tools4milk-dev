@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Rate limiting en ``POST /auth/login`` (sliding window por IP).
+    # Si se excede ``login_rate_limit_max`` intentos en
+    # ``login_rate_limit_window_seconds``, el endpoint devuelve 429.
+    login_rate_limit_max: int = 5
+    login_rate_limit_window_seconds: int = 60
+
     aemet_api_key: str = ""
     aemet_municipio_id: str = "27065"
     aemet_estacion_id: str = ""

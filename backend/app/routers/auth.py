@@ -20,7 +20,7 @@ frontend pueda hidratar el usuario al recargar.
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ from app.schemas.api import AuthResponse, LoginRequest, TokenResponse, UserRespo
 from app.security import (
     create_access_token,
     get_current_user,
+    login_rate_limiter,
     set_auth_cookie,
     unset_auth_cookie,
     verify_password,
@@ -63,9 +64,14 @@ def user_payload(user: Usuario) -> UserResponse:
 @router.post("/login", response_model=AuthResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthResponse:
+    # Rate limit ANTES de validar credenciales para que un atacante no
+    # pueda enumerar usuarios. La cuenta es por IP y sliding-window.
+    login_rate_limiter.check_and_record(request)
+
     user = db.execute(select(Usuario).where(Usuario.username == payload.username)).scalar_one_or_none()
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
