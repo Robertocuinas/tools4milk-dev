@@ -209,8 +209,6 @@ export default function ZoneDetailPage({ params }: { params: Promise<{ id: strin
   const [showIncident, setShowIncident] = useState(false);
   const [showTreatment, setShowTreatment] = useState(false);
 
-  const [lastHandoverRead, setLastHandoverRead] = useState(false);
-
   const zonesQ = useQuery({ queryKey: ["zones"], queryFn: api.zones, staleTime: TV_STALE.CATALOG });
   const tasksQ = useQuery({ queryKey: ["zone-tasks", zoneKey], queryFn: () => api.tasks({ limit: 500 }), staleTime: TV_STALE.NORMAL, refetchInterval: TV_REFETCH.NORMAL });
   const incidentsQ = useQuery({ queryKey: ["zone-incidents", zoneKey], queryFn: () => api.incidents({ limit: 300 }), staleTime: TV_STALE.NORMAL, refetchInterval: TV_REFETCH.NORMAL });
@@ -239,9 +237,7 @@ export default function ZoneDetailPage({ params }: { params: Promise<{ id: strin
   const treatments = (treatmentsQ.data ?? []).filter((t) => groupAnimalIds.has(t.animal_id));
 
   const role = meQ.data?.role;
-  const canManageTreatments = role === "admin" || role === "veterinario";
   const canCompleteTasks = role === "admin" || role === "operario" || role === "alimentacion";
-  const canCreateIncidents = !!role;
   const isTvMode = mode === "tv";
 
   return (
@@ -273,7 +269,9 @@ export default function ZoneDetailPage({ params }: { params: Promise<{ id: strin
         {handoversQ.data?.resumenes?.[0] && (
           <LastHandoverCard
             handover={handoversQ.data.resumenes[0]}
-            onMarkAsRead={() => setLastHandoverRead(true)}
+            onMarkAsRead={() => {
+              /* no-op: la marca se persiste en localStorage dentro del card */
+            }}
             readOnly={mode !== "tablet"}
           />
         )}
@@ -297,7 +295,6 @@ export default function ZoneDetailPage({ params }: { params: Promise<{ id: strin
         {mode === "tablet" && (
           <ZoneTabletView
             tasks={tasks}
-            zones={incidentZones}
             zoneKey={zoneKey}
             canStartTasks={canCompleteTasks}
             onCreateIncident={() => setShowIncident(true)}

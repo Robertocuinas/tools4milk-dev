@@ -306,14 +306,12 @@ function AddEmployeeModal({
 
 // ── Gantt view ─────────────────────────────────────────────────────────────
 
-type GanttCell = { shiftId: string; tipo: ShiftType } | null;
 
 function GanttView({
   weekDates,
   shifts,
   assignments,
   employees,
-  zones,
   onAddShift,
   onAddEmployee,
 }: {
@@ -349,7 +347,12 @@ function GanttView({
     return map;
   }, [assignments]);
 
-  // Collect all employee IDs that appear in any assignment for this week
+  // Collect all employee IDs that appear in any assignment for this week.
+  // weekShiftIds is recomputed on every render (it's a Set, not memoized) and
+  // is only consumed inside the useMemo below — that triggers the
+  // react-hooks/exhaustive-deps warning. Acceptable here because the set is
+  // cheap and `assignments` is the real dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const weekShiftIds = new Set(shifts.map((s) => s.id));
   const weekEmployeeIds = useMemo(() => {
     const ids = new Set<string>();
@@ -529,8 +532,6 @@ export default function ShiftsPage() {
     const weekShiftIds = new Set(weekShifts.map((s) => s.id));
     return (assignmentsQuery.data?.asignaciones ?? []).filter((a) => weekShiftIds.has(a.turno_id));
   }, [assignmentsQuery.data, weekShifts]);
-
-  const todayShiftsCount = weekShifts.filter((s) => s.fecha === isoDate(new Date())).length;
   const totalAssignments = weekAssignments.length;
 
   const monthLabel = weekDates[0].toLocaleDateString("es-ES", { month: "long", year: "numeric" });

@@ -10,14 +10,6 @@ function formatTime(iso?: string | null) {
   });
 }
 
-function formatDate(iso?: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "short",
-  });
-}
-
 const TaskCard = ({ task, hasIncident }: { task: Task; hasIncident: boolean }) => {
   const bgClass = hasIncident ? "border-state-critica/50 bg-state-critica/10" : "border-app-border bg-white";
 

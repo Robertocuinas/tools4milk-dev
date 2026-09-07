@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Play, CheckCircle2, MessageSquare, AlertOctagon } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import type { Task, Zone } from "@/lib/types";
+import type { Task } from "@/lib/types";
 
 function formatTime(iso?: string | null) {
   if (!iso) return "—";
@@ -116,14 +116,12 @@ function TaskRow({
 
 export function ZoneTabletView({
   tasks,
-  zones,
   zoneKey,
   canStartTasks,
   onCreateIncident,
   onShowTreatment,
 }: {
   tasks: Task[];
-  zones: Zone[];
   zoneKey: "recria" | "nave";
   canStartTasks: boolean;
   onCreateIncident: () => void;
@@ -167,7 +165,6 @@ export function ZoneTabletView({
 
   const pendingTasks = tasks.filter((t) => t.estado === "programada" || t.estado === "retrasada");
   const inProgressTasks = tasks.filter((t) => t.estado === "pausada");
-  const completedTasks = tasks.filter((t) => t.estado === "ejecutada");
 
   const showTreatmentSection = zoneKey === "recria";
 
