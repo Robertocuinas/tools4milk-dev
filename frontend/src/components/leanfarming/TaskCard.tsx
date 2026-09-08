@@ -32,6 +32,15 @@ export function TaskCard({
   return (
     <div
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `Ver detalle de ${task.tarea_catalogo?.nombre ?? "tarea"}` : undefined}
       className={`rounded-[10px] border cursor-pointer transition hover:shadow-sm ${bgClass} ${
         isCompact ? "p-3" : "p-4"
       } ${!onClick && "cursor-default"}`}

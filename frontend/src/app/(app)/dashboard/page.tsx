@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertOctagon,
   ArrowLeftRight,
@@ -25,6 +25,8 @@ import { KpiCard } from "@/components/ui/kpi-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { PanelCard } from "@/components/ui/panel-card";
 import { SyntheticMarker } from "@/components/ui/synthetic-marker";
+import { StatusState } from "@/components/ui/status-state";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import type { Incident, Lactation } from "@/lib/types";
 
@@ -62,6 +64,7 @@ function lactationTrend(items: Lactation[]) {
 }
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
   const summary = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: api.dashboardSummary,
@@ -105,6 +108,8 @@ export default function DashboardPage() {
   const trend = lactationTrend(lactations.data ?? []);
   const taskTotal = (s?.tareas.programadas ?? 0) + (s?.tareas.ejecutadas ?? 0) + (s?.tareas.retrasadas ?? 0);
   const taskDonePct = s ? Math.round((s.tareas.ejecutadas / Math.max(1, taskTotal)) * 100) : 0;
+  const lastUpdated = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt) : null;
+  const refreshAll = () => queryClient.refetchQueries({ type: "active" });
 
   return (
     <div className="min-h-full">
@@ -124,10 +129,18 @@ export default function DashboardPage() {
           <RefreshCw className="h-3.5 w-3.5 text-brand" />
           Actualización cada 30 s
         </span>
+        <Button type="button" variant="secondary" size="sm" onClick={refreshAll} disabled={summary.isFetching} aria-label="Actualizar datos del dashboard">
+          <RefreshCw className={`h-3.5 w-3.5 ${summary.isFetching ? "animate-spin" : ""}`} aria-hidden="true" />
+          Actualizar
+        </Button>
         <SyntheticMarker />
       </PageHeader>
 
       <div className="space-y-6 px-6 py-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-app-dim" role="status" aria-live="polite">
+          <span>Fuente: datos de demo sintética · escenario cargado por backend</span>
+          <span>{lastUpdated ? `Última actualización: ${lastUpdated.toLocaleString("es-ES")}` : "Sin actualización todavía"}</span>
+        </div>
         {/* KPI grid */}
         {summary.isLoading ? (
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -135,6 +148,15 @@ export default function DashboardPage() {
               <div key={i} className="h-28 animate-pulse rounded-[14px] bg-app-surface2" />
             ))}
           </div>
+        ) : summary.isError ? (
+          <StatusState
+            kind="error"
+            title="No se pudo cargar el dashboard"
+            description="El servicio no respondió. Puedes reintentar sin perder la vista actual."
+            action={<Button type="button" onClick={refreshAll}>Reintentar</Button>}
+          />
+        ) : !s ? (
+          <StatusState kind="empty" title="No hay datos operativos" description="El escenario sintético todavía no tiene métricas disponibles." />
         ) : (
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <Link href="/incidents">
