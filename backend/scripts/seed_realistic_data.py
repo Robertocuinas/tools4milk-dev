@@ -38,6 +38,7 @@ if str(ROOT) not in sys.path:
 from sqlalchemy import func, select  # noqa: E402
 
 from app.database import SessionLocal  # noqa: E402
+from app.config import settings  # noqa: E402
 from app.enums import EstadoAnimal, EstadoTarea, NivelAlerta, TipoTurno  # noqa: E402
 from app.models.tools4milk import (  # noqa: E402
     Alerta,
@@ -573,6 +574,9 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+
+    if settings.environment.lower() == "production":
+        raise SystemExit("Synthetic seed is disabled in production")
 
     # Asegurar que el schema existe. Idempotente: ``create_all`` con
     # checkfirst=True (default) solo crea tablas/índices que no existen.

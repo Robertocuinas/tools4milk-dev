@@ -1,15 +1,20 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEMO_SECRET_KEY = "tools4milk-demo-secret-change-me-please-32chars"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = "sqlite:///./tfm_mvp.db"
     database_echo: bool = False
     environment: str = "development"
-    debug: bool | str = True
+    debug: bool | str = False
 
-    secret_key: str = "tools4milk-dev-secret-change-me"
+    # No hay secretos funcionales por defecto. La demo los proporciona de
+    # forma explícita mediante .env/Compose; producción los valida al arrancar.
+    secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
@@ -32,17 +37,11 @@ class Settings(BaseSettings):
 
     app_url: str = "http://localhost:8000"
 
-    initial_demo_password: str = "testpass123"
+    initial_demo_password: str = ""
 
-    admin_secret: str = ""
-
-    cors_origins: list[str] | str = [
-        "http://localhost",
-        "http://localhost:80",
-        "http://localhost:3000",
-        "http://127.0.0.1",
-        "http://127.0.0.1:3000",
-    ]
+    # Vacío por defecto: el despliegue demo declara sus orígenes de forma
+    # explícita y producción nunca hereda una política permisiva.
+    cors_origins: list[str] | str = []
 
 
 settings = Settings()

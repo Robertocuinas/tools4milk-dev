@@ -3,10 +3,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.routers.deps import DbSession
-from app.security import get_current_user
+from app.security import require_roles
 from app.services import predictions_service
 
-router = APIRouter(prefix="/api/v1", tags=["Frontend Core"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["Frontend Core"],
+    dependencies=[Depends(require_roles("admin", "veterinario", "alimentacion"))],
+)
 
 
 @router.get("/predictions/{animal_id}")

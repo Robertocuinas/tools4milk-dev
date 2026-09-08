@@ -1,9 +1,6 @@
 """Admin router — privileged operations not exposed in the regular API.
 
-Endpoints here are protected by a static secret token passed via the
-``X-Admin-Token`` request header.  Set the ``ADMIN_SECRET`` environment
-variable in Railway (or your .env) to a strong random string.  If the
-variable is not set the endpoints are disabled entirely (returns 503).
+Endpoints here use the same JWT + role authorization as the rest of the API.
 """
 
 from __future__ import annotations
@@ -14,9 +11,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.config import settings
+from app.logging_utils import redact_configured_secret
+from app.routers.deps import AdminOnly
 
 logger = logging.getLogger("tools4milk.admin")
 
@@ -26,9 +25,6 @@ router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 # Helpers
 # ---------------------------------------------------------------------------
 
-_ADMIN_SECRET: str = getattr(settings, "admin_secret", "")
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -36,8 +32,8 @@ _ADMIN_SECRET: str = getattr(settings, "admin_secret", "")
 
 @router.post("/seed-data")
 def seed_realistic_data(
+    _user: AdminOnly,
     weather_days: int = Query(default=14, ge=1, le=365, description="Days of weather readings to generate"),
-    x_admin_token: str = Header(..., alias="X-Admin-Token"),
 ) -> dict[str, Any]:
     """Execute ``scripts/seed_realistic_data.py`` and return its output.
 
@@ -45,20 +41,10 @@ def seed_realistic_data(
     Pass ``weather_days`` to control how many days of meteorological readings
     are generated (default: 14).
 
-    Requires the ``X-Admin-Token`` header to match the ``ADMIN_SECRET``
-    environment variable.
+    Requires an authenticated user with the canonical ``admin`` role.
     """
-    # Validate token inline (avoids Depends() complexity with Header aliases)
-    if not _ADMIN_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin endpoints are disabled: ADMIN_SECRET is not configured.",
-        )
-    if x_admin_token != _ADMIN_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid admin token.",
-        )
+    if settings.environment.lower() == "production":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Synthetic seed is disabled in production")
 
     # Resolve the script path relative to the working directory (WORKDIR /app
     # in the Docker image, where scripts/ is copied alongside app/).
@@ -71,7 +57,7 @@ def seed_realistic_data(
         )
 
     cmd = [sys.executable, str(script_path), "--weather-days", str(weather_days)]
-    logger.info("[admin] running seed script: %s", " ".join(cmd))
+    logger.info("[admin] running seed script")
 
     try:
         result = subprocess.run(
@@ -89,7 +75,7 @@ def seed_realistic_data(
         logger.exception("[admin] unexpected error running seed script")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to execute seed script: {exc}",
+            detail=f"Failed to execute seed script: {redact_configured_secret(exc, settings.aemet_api_key)}",
         ) from exc
 
     success = result.returncode == 0
@@ -100,6 +86,6 @@ def seed_realistic_data(
         "success": success,
         "return_code": result.returncode,
         "weather_days": weather_days,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": redact_configured_secret(result.stdout, settings.aemet_api_key),
+        "stderr": redact_configured_secret(result.stderr, settings.aemet_api_key),
     }

@@ -2,6 +2,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import urlparse
 from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s - %(message)s")
@@ -12,8 +13,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from sqlalchemy import inspect, text
 
-from app.config import settings
+from app.config import DEMO_SECRET_KEY, settings
 from app.database import Base, engine
+from app.logging_utils import redact_sensitive_text
 from app.openapi import install_openapi
 from app.routers import (
     admin,
@@ -47,17 +49,20 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("[startup] validating config...")
     validate_production_config()
 
-    logger.info("[startup] connecting to database at %s ...", settings.database_url.split("@")[-1])
+    logger.info(
+        "[startup] connecting to database at %s ...",
+        redact_sensitive_text(settings.database_url.split("@")[-1]),
+    )
     try:
         with engine.connect() as _conn:
             _conn.execute(text("SELECT 1"))
         logger.info("[startup] database connection OK")
     except Exception as exc:
-        logger.error("[startup] CANNOT CONNECT TO DATABASE: %s", exc)
+        logger.error("[startup] CANNOT CONNECT TO DATABASE: %s", redact_sensitive_text(exc))
         raise RuntimeError(
-            f"Database not reachable ({settings.database_url.split('@')[-1]}). "
+            f"Database not reachable ({redact_sensitive_text(settings.database_url.split('@')[-1])}). "
             "Ensure the db container is running and port 5432 is exposed. "
-            f"Original error: {exc}"
+            f"Original error: {redact_sensitive_text(exc)}"
         ) from exc
 
     logger.info("[startup] running create_all (Core* tables) ...")
@@ -77,12 +82,42 @@ def validate_production_config() -> None:
     if settings.environment.lower() != "production":
         return
 
-    if settings.secret_key == "tools4milk-dev-secret-change-me" or len(settings.secret_key) < 32:
-        raise RuntimeError("SECRET_KEY must be changed before running in production")
+    if (
+        not settings.secret_key
+        or settings.secret_key in {"tools4milk-dev-secret-change-me", DEMO_SECRET_KEY}
+        or len(settings.secret_key) < 32
+    ):
+        raise RuntimeError("SECRET_KEY must be explicitly configured with at least 32 characters in production")
+
+    if settings.initial_demo_password.strip():
+        raise RuntimeError("INITIAL_DEMO_PASSWORD must be empty in production; create users explicitly")
+
+    if _setting_is_true(settings.debug):
+        raise RuntimeError("DEBUG must be disabled in production")
+
+    if settings.database_url.lower().startswith("sqlite"):
+        raise RuntimeError("DATABASE_URL must point to PostgreSQL in production")
+    if "postgres:postgres@" in settings.database_url.lower():
+        raise RuntimeError("DATABASE_URL contains the demo database credentials")
+
+    app_url = urlparse(settings.app_url)
+    if app_url.scheme != "https" or not app_url.netloc:
+        raise RuntimeError("APP_URL must be an HTTPS URL in production")
 
     origins = parse_cors_origins()
-    if not origins or "*" in origins:
-        raise RuntimeError("CORS_ORIGINS must be explicit before running in production")
+    if not origins or any(origin == "*" or _is_local_http_origin(origin) for origin in origins):
+        raise RuntimeError("CORS_ORIGINS must contain explicit HTTPS origins in production")
+
+
+def _setting_is_true(value: bool | str) -> bool:
+    return value is True or (
+        isinstance(value, str) and value.strip().lower() in {"1", "true", "yes", "on"}
+    )
+
+
+def _is_local_http_origin(origin: str) -> bool:
+    parsed = urlparse(origin)
+    return parsed.scheme != "https" or parsed.hostname in {"localhost", "127.0.0.1", "::1"}
 
 
 def ensure_runtime_schema() -> None:
@@ -106,6 +141,13 @@ def ensure_runtime_schema() -> None:
 
 
 def seed_demo_user() -> None:
+    if settings.environment.lower() not in {"development", "demo", "test"}:
+        logger.info("[startup] demo user seed disabled outside demo/development")
+        return
+    if not settings.initial_demo_password.strip():
+        logger.info("[startup] demo user seed disabled: INITIAL_DEMO_PASSWORD is empty")
+        return
+
     user_columns = {column["name"] for column in inspect(engine).get_columns("usuarios")}
     legacy_password_change_column = "debe_cambiar_contrase\u00f1a"
     demo_users = [
@@ -213,8 +255,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=parse_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
 
 

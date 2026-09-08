@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tools4milk import TareaCatalogo
 from app.repositories import tasks_repository
-from app.routers.deps import DbSession, TaskManager
+from app.routers.deps import AdminOnly, DbSession, TaskManager
 from app.security import get_current_user
 from app.services import tasks_service
 
@@ -70,7 +70,7 @@ def task_catalog(
 
 
 @router.post("/tareas-catalogo", status_code=201)
-def create_task_catalog(payload: dict[str, Any], db: DbSession) -> dict[str, Any]:
+def create_task_catalog(payload: dict[str, Any], db: DbSession, _user: AdminOnly) -> dict[str, Any]:
     """Create a new task catalog item."""
     item = TareaCatalogo(
         id=uuid.uuid4(),
@@ -96,7 +96,7 @@ def create_task_catalog(payload: dict[str, Any], db: DbSession) -> dict[str, Any
 
 
 @router.put("/tareas-catalogo/{catalog_id}")
-def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession) -> dict[str, Any]:
+def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession, _user: AdminOnly) -> dict[str, Any]:
     """Update a task catalog item."""
     try:
         uid = uuid.UUID(catalog_id)
@@ -134,7 +134,7 @@ def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession)
 
 
 @router.delete("/tareas-catalogo/{catalog_id}", status_code=204)
-def delete_task_catalog(catalog_id: str, db: DbSession) -> None:
+def delete_task_catalog(catalog_id: str, db: DbSession, _user: AdminOnly) -> None:
     """Delete or deactivate a task catalog item."""
     try:
         uid = uuid.UUID(catalog_id)

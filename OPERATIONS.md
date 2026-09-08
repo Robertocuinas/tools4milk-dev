@@ -22,7 +22,7 @@ y se centra en **cómo correrla en otro servidor sin sorpresas**.
 git clone https://github.com/Robertocuinas/tools4milk-dev.git
 cd tools4milk-dev
 
-# 2. Configurar el entorno (opcional pero recomendado)
+# 2. Configurar el entorno demo (explícito y solo local)
 cat > .env <<'EOF'
 ENVIRONMENT=development
 SECRET_KEY=$(openssl rand -base64 48)   # ⚠ cambia esto en producción
@@ -32,7 +32,7 @@ EOF
 
 # 3. Levantar el stack limpio
 #    - Postgres espera a estar healthy
-#    - Backend aplica migraciones (0000..0009) y siembra usuarios demo
+#    - Backend aplica migraciones (0000..0009) y, solo con configuración demo, siembra usuarios
 #    - Frontend espera al backend
 #    - Nginx enruta solo cuando frontend Y backend están healthy
 docker compose up -d --build
@@ -64,11 +64,13 @@ docker compose up -d --build
 
 El `-v` borra el volumen `postgres_data`. La próxima vez que arranque,
 `docker-entrypoint-initdb.d/init.sql` creará el schema base y el backend
-aplicará las migraciones numeradas y sembrará los 5 usuarios demo.
+aplicará las migraciones numeradas. Los usuarios demo solo se crean si
+`ENVIRONMENT=development` (o `demo`/`test`) y `INITIAL_DEMO_PASSWORD` no está vacío.
 
 ### Poblar con datos de demo
 
-El backend crea 5 usuarios en el primer arranque (ver §5) pero las tablas
+Con `ENVIRONMENT=development` y `INITIAL_DEMO_PASSWORD` no vacío, el backend
+crea 5 usuarios demo en el primer arranque (ver §5); las tablas
 de dominio (animales, lactaciones, alertas…) arrancan vacías. Para
 poblar la BD con datos de ejemplo, ejecuta el seed manual:
 
@@ -121,7 +123,7 @@ Las mínimas para producción:
 | `ENVIRONMENT` | `production` | Activa validaciones duras en startup + HSTS + cookie `Secure`. |
 | `CORS_ORIGINS` | `https://granja.example.com` | Lista separada por comas. **Nunca** dejar `*` en prod. |
 | `AEMET_API_KEY` | (opcional) | API key de AEMET OpenData. Si falta, el módulo `weather` usa datos sintéticos. |
-| `INITIAL_DEMO_PASSWORD` | (vacío en prod) | Contraseña inicial de los 5 usuarios demo. **Vacía en prod** para que el seed no se aplique. |
+| `INITIAL_DEMO_PASSWORD` | (vacío en prod) | Contraseña inicial de los 5 usuarios demo. Solo se procesa en `development`, `demo` o `test`; **vacía en prod** y producción rechaza cualquier valor. |
 | `LOGIN_RATE_LIMIT_MAX` | `5` | Intentos por ventana (default 5). |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana de rate limit (default 60s). |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | TTL del refresh token. |
@@ -173,9 +175,9 @@ el logout forzado es aceptable para esta app interna.
 
 ## 5. Usuarios demo
 
-`backend/app/main.py::seed_demo_user` crea 5 usuarios la primera vez
-que arranca el backend, **solo si** `INITIAL_DEMO_PASSWORD` está
-definida:
+`backend/app/main.py::seed_demo_user` crea 5 usuarios al arrancar solo
+en `development`, `demo` o `test`, y únicamente cuando
+`INITIAL_DEMO_PASSWORD` está definida y no vacía:
 
 | Username | Rol | Uso |
 |---|---|---|
@@ -187,9 +189,10 @@ definida:
 
 Todos con `INITIAL_DEMO_PASSWORD` y `debe_cambiar_contrasena=False`.
 
-**En producción**: deja `INITIAL_DEMO_PASSWORD=""` para que el seed
-no se aplique. Crea los usuarios reales a través de
-`POST /api/v1/auth/users` o directamente con `psql` + un hash bcrypt.
+**En producción**: `ENVIRONMENT=production` rechaza el arranque si
+`INITIAL_DEMO_PASSWORD` no está vacía y nunca ejecuta el seed. Crea los
+usuarios reales mediante un procedimiento administrativo fuera de este
+seed; no reutilices las credenciales demo.
 
 ---
 

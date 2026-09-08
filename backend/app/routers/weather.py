@@ -6,9 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.tools4milk import LecturaMeteo
+from app.routers.deps import AdminOnly, WeatherReader
+from app.security import get_current_user
 from app.services.aemet_client import aemet_client
 
-router = APIRouter(prefix="/api/v1/weather", tags=["Weather"])
+router = APIRouter(
+    prefix="/api/v1/weather",
+    tags=["Weather"],
+    dependencies=[Depends(get_current_user)],
+)
 
 _NO_DATA: dict[str, Any] = {
     "temperatura_actual": None,
@@ -24,7 +30,7 @@ _NO_DATA: dict[str, Any] = {
 
 
 @router.get("/current")
-def weather_current(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+def weather_current(db: Annotated[Session, Depends(get_db)], _user: WeatherReader) -> dict[str, Any]:
     row = db.execute(
         select(LecturaMeteo).order_by(desc(LecturaMeteo.ts)).limit(1)
     ).scalar_one_or_none()
@@ -44,7 +50,7 @@ def weather_current(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
 
 
 @router.get("/forecast")
-def weather_forecast(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+def weather_forecast(db: Annotated[Session, Depends(get_db)], _user: WeatherReader) -> dict[str, Any]:
     """Returns up to 7 recent sensor readings ordered by timestamp.
     NOTE: This is historical sensor data, not a real weather forecast.
     Use /readings for a clearly-labelled version of the same data."""
@@ -74,6 +80,7 @@ def weather_forecast(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
 @router.get("/readings")
 def weather_readings(
     db: Annotated[Session, Depends(get_db)],
+    _user: WeatherReader,
     limit: Annotated[int, Query(ge=1, le=90)] = 14,
     order: Annotated[str, Query(pattern="^(asc|desc)$")] = "desc",
 ) -> dict[str, Any]:
@@ -108,6 +115,7 @@ def weather_readings(
 @router.get("/historical")
 def weather_historical(
     db: Annotated[Session, Depends(get_db)],
+    _user: WeatherReader,
     dias_atras: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     rows = db.execute(
@@ -130,7 +138,7 @@ def weather_historical(
 
 
 @router.post("/sync")
-async def weather_sync(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+async def weather_sync(db: Annotated[Session, Depends(get_db)], _user: AdminOnly) -> dict[str, Any]:
     """Synchronize weather data from AEMET or use fallback synthetic data.
     
     Behavior:
@@ -145,7 +153,10 @@ async def weather_sync(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any
 
 
 @router.get("/correlation/impact")
-def weather_impact(dias_adelante: Annotated[int, Query(ge=1, le=30)] = 7) -> dict[str, Any]:
+def weather_impact(
+    _user: WeatherReader,
+    dias_adelante: Annotated[int, Query(ge=1, le=30)] = 7,
+) -> dict[str, Any]:
     return {
         "ubicacion": "Villalba, Lugo",
         "dias_adelante": dias_adelante,

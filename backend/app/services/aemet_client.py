@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.logging_utils import redact_configured_secret
 from app.models.datos_metereologicos import DatosMetereologicos
 from app.models.tools4milk import LecturaMeteo
 from app.time_utils import utc_now
@@ -49,7 +50,7 @@ class AemetClient:
             return {
                 "status": "error",
                 "modo": "aemet_real",
-                "error": str(exc) or exc.__class__.__name__,
+                "error": redact_configured_secret(exc, settings.aemet_api_key) or exc.__class__.__name__,
                 "registros_insertados": 0,
                 "registros_actualizados": 0,
                 "timestamp": utc_now().isoformat(),
