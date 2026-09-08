@@ -454,6 +454,41 @@ class SyntheticProvenance(Base):
     payload: Mapped[dict] = mapped_column(POSTGRES_JSON, nullable=False, default=dict)
 
 
+class SchedulerState(Base):
+    """Estado singleton del scheduler de la demo sintética."""
+
+    __tablename__ = "synthetic_scheduler_state"
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SchedulerRun(Base):
+    """Métrica histórica compacta de cada ejecución del scheduler."""
+
+    __tablename__ = "synthetic_scheduler_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    profile: Mapped[str] = mapped_column(String(20), nullable=False)
+    scenario: Mapped[str] = mapped_column(String(80), nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_class: Mapped[str | None] = mapped_column(String(80))
+
+
 # ---------------------------------------------------------------------------
 # Pedidos
 # ---------------------------------------------------------------------------

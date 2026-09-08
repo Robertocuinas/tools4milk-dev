@@ -21,6 +21,8 @@ from app.models.tools4milk import (
     Pedido,
     ResumenRelevo,
     SyntheticProvenance,
+    SchedulerRun,
+    SchedulerState,
     TareaCatalogo,
     TareaEjecucion,
     TareaRecurrente,
@@ -60,6 +62,8 @@ __all__ = [
     "LecturaRobotOrdeno",
     "ResumenRelevo",
     "SyntheticProvenance",
+    "SchedulerRun",
+    "SchedulerState",
     # Auth
     "RefreshToken",
     "Usuario",

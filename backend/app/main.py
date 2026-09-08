@@ -33,6 +33,7 @@ from app.routers import (
     orders,
     predictions,
     shifts,
+    synthetic_scheduler,
     tasks,
     treatments,
     weather,
@@ -326,5 +327,6 @@ app.include_router(weather.router)
 app.include_router(audit.router)
 app.include_router(orders.router)
 app.include_router(shifts.router)
+app.include_router(synthetic_scheduler.router)
 app.include_router(handovers.router)
 install_openapi(app)

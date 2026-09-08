@@ -46,6 +46,20 @@ services:
       retries: 6
       start_period: 30s
 
+  scheduler:
+    build: ./backend
+    container_name: tfm-synthetic-scheduler
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tools4milk}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: python scripts/run_synthetic_scheduler.py --interval-seconds ${SYNTHETIC_INTERVAL_SECONDS:-3600} --profile ${SYNTHETIC_PROFILE:-small} --scenario ${SYNTHETIC_SCENARIO:-normal}
+
   frontend:
     build:
       context: ./frontend

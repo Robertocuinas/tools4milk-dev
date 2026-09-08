@@ -46,6 +46,34 @@ docker compose logs -f backend | head -30
 # http://0.0.0.0:8000".
 ```
 
+### Scheduler sintético y recurrencias
+
+El servicio `scheduler` se inicia junto con Compose y materializa recurrencias
+cada hora por defecto. No requiere AEMET, Redis ni Celery: las claves de
+recurrencia y ocurrencia se derivan de versión, seed, escenario y fecha.
+Repetir la ejecución solo incrementa `omitidos`; nunca duplica tareas ni
+provenance.
+
+```bash
+# Ejecutar una materialización manual dentro del backend
+docker compose exec backend python scripts/run_synthetic_scheduler.py --once --profile small --horizon-days 7
+
+# Pausar/reanudar (añade el token/cookie admin habitual)
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/scheduler/pause
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/scheduler/resume
+
+# Consultar estado: última ejecución, duración, creados, omitidos y errores
+curl http://localhost:8000/api/v1/admin/synthetic/scheduler
+
+# Reset seguro: solo filas con provenance synthetic/generated
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/reset
+docker compose exec backend python scripts/run_synthetic_scheduler.py --once --seed 20260602
+```
+
+Variables opcionales: `SYNTHETIC_INTERVAL_SECONDS` (>=1),
+`SYNTHETIC_PROFILE` (`small`, `demo`, `load`) y `SYNTHETIC_SCENARIO`.
+Los endpoints de operación sintética están deshabilitados en producción.
+
 ### URLs por defecto
 
 - **Frontend (Nginx)**: http://localhost
