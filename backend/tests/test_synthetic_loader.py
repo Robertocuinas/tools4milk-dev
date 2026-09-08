@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from app.database import Base
-from app.models.tools4milk import SyntheticProvenance, TareaEjecucion, Turno
+from app.models.tools4milk import SyntheticProvenance, TareaEjecucion, Turno, Zona
 from app.synthetic_data import GenerationRequest, generate_dataset
 from app.synthetic_loader import load_dataset
 
@@ -37,3 +38,16 @@ def test_synthetic_loader_rejects_records_without_provenance():
         else:
             raise AssertionError("a dataset without provenance must be rejected")
         assert db.scalar(select(func.count()).select_from(SyntheticProvenance)) == 0
+
+
+def test_synthetic_loader_reuses_canonical_zone_name():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    dataset = generate_dataset(GenerationRequest(profile="small"))
+
+    with Session(engine) as db:
+        db.add(Zona(id=UUID("abcdefab-cdef-4abc-8def-abcdefabcdef"), nombre="Nave", codigo="existing"))
+        db.commit()
+        load_dataset(db, dataset)
+
+        assert db.scalar(select(func.count()).select_from(Zona).where(Zona.nombre == "Nave")) == 1

@@ -84,13 +84,31 @@ def _employee_role(value: str) -> RolEmpleado:
 def load_base(db: Session, dataset: dict[str, Any]) -> dict[str, int]:
     """Materializa maestros y provenance en una única transacción."""
     with db.begin():
+        zone_id_aliases: dict[str, str] = {}
         for row in dataset.get("zones", []):
-            entity_id = _uuid(row["id"])
+            original_id = str(row["id"])
+            entity_id = _uuid(original_id)
             item = db.get(Zona, entity_id)
             if item is None:
-                item = Zona(id=entity_id, nombre=row["name"], codigo=row["code"])
-                db.add(item)
+                # ``database/init.sql`` may already contain the canonical
+                # demo zone. Reuse it by its unique name instead of trying
+                # to insert a second row with the synthetic UUID.
+                item = db.scalar(select(Zona).where(Zona.nombre == row["name"]))
+                if item is None:
+                    item = Zona(id=entity_id, nombre=row["name"], codigo=row["code"])
+                    db.add(item)
+                else:
+                    row["id"] = str(item.id)
+                    zone_id_aliases[original_id] = str(item.id)
             _provenance(db, "zone", row)
+
+        # Event rows refer to the contract IDs. Keep their foreign keys
+        # aligned when a canonical init.sql zone was reused above.
+        if zone_id_aliases:
+            for collection in ("tasks", "shifts", "assignments"):
+                for row in dataset.get(collection, []):
+                    if row.get("zone_id") in zone_id_aliases:
+                        row["zone_id"] = zone_id_aliases[row["zone_id"]]
 
         for row in dataset.get("employees", []):
             entity_id = _uuid(row["id"])
@@ -157,6 +175,11 @@ def materialize_events(db: Session, dataset: dict[str, Any]) -> dict[str, int]:
                 )
                 db.add(item)
             _provenance(db, "shift", row)
+
+        # No ORM relationship links ``AsignacionTurno.turno_id`` to the
+        # just-created ``Turno`` rows, so make the parent inserts visible to
+        # PostgreSQL before adding child assignments.
+        db.flush()
 
         for index, row in enumerate(dataset.get("shifts", [])):
             if not employees:

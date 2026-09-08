@@ -428,6 +428,32 @@ class TestRefreshToken:
         assert response_ok.status_code == status.HTTP_200_OK
         assert response_ok.json()["refresh_token"] != cookie_refresh
 
+    def test_login_serializa_usuario_antes_de_commit_del_refresh(
+        self, client, test_user, test_user_credentials, monkeypatch
+    ):
+        """El login no debe leer una entidad expirada tras crear el refresh.
+
+        El helper real confirma la sesión para persistir el refresh. Este
+        doble reproduce el borde observado con una sesión concurrente:
+        expira ``Usuario`` justo después de emitir tokens. La respuesta debe
+        seguir siendo 200 y contener el usuario ya capturado.
+        """
+        from app.routers import auth as auth_router
+
+        original = auth_router._build_full_token_response
+
+        def expire_user_after_tokens(db, user, ip):
+            result = original(db, user, ip)
+            db.expire(user)
+            return result
+
+        monkeypatch.setattr(auth_router, "_build_full_token_response", expire_user_after_tokens)
+
+        response = client.post("/api/v1/auth/login", json=test_user_credentials)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["user"]["username"] == test_user.username
+
     def test_refresh_max_per_user_revoca_mas_antiguo(self, client, test_user, test_user_credentials):
         """Si el usuario supera ``refresh_token_max_per_user`` (5 por
         defecto), el refresh más antiguo se revoca al emitir uno nuevo.

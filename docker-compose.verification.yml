@@ -1,0 +1,33 @@
+# Stack de certificación Release 1: recursos y puertos exclusivos.
+# Uso: docker compose -p tfm_release1 -f docker-compose.yml -f docker-compose.verification.yml up -d --build
+services:
+  db:
+    container_name: tfm-release1-db
+    ports: !override
+      - "127.0.0.1:15432:5432"
+  backend:
+    container_name: tfm-release1-backend
+    ports: !override
+      - "127.0.0.1:18000:8000"
+    build:
+      context: ./backend
+      args:
+        RELEASE1_BUILD: "20260909"
+  scheduler:
+    container_name: tfm-release1-scheduler
+    build:
+      context: ./backend
+      args:
+        RELEASE1_BUILD: "20260909"
+  frontend:
+    container_name: tfm-release1-frontend
+    ports: !override
+      - "127.0.0.1:13000:3000"
+  nginx:
+    container_name: tfm-release1-nginx
+    ports: !override
+      - "127.0.0.1:18080:80"
+
+volumes:
+  postgres_data:
+    name: tfm-release1-postgres-data
