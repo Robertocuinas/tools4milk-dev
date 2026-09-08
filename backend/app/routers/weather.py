@@ -5,7 +5,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.contracts import provenance
+from app.contracts import canonical_source, provenance
 from app.models.tools4milk import LecturaMeteo
 from app.routers.deps import AdminOnly, WeatherReader
 from app.security import get_current_user
@@ -95,7 +95,7 @@ def weather_readings(
                 "viento_km_h": float(row.viento_km_h) if row.viento_km_h is not None else None,
                 "direccion_viento": row.direccion_viento,
                 "estacion_id": row.estacion_id,
-                "fuente": row.fuente or "generated",
+                "fuente": canonical_source(row.fuente),
             }
             for row in rows
         ],
@@ -121,7 +121,7 @@ def weather_historical(
                 "temperatura_media": float(row.temperatura_c) if row.temperatura_c is not None else None,
                 "humedad": float(row.humedad_relativa) if row.humedad_relativa is not None else None,
                 "descripcion": None,
-                "fuente": row.fuente or "generated",
+                "fuente": canonical_source(row.fuente),
             }
             for row in rows
         ],

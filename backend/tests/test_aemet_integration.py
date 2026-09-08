@@ -104,6 +104,29 @@ class TestWeatherEndpoints:
         assert data["mode"] == "synthetic"
         assert data["synthetic"] is True
 
+    def test_lecturas_legacy_aemet_se_normalizan(self, client, db, auth_headers):
+        """Los datos previos a P0 usaban ``AEMET``; la API publica el contrato canonico."""
+        from app.models.tools4milk import LecturaMeteo
+
+        db.add(
+            LecturaMeteo(
+                ts=utc_now().replace(tzinfo=None),
+                estacion_id="legacy-aemet",
+                temperatura_c=18,
+                fuente="AEMET",
+            )
+        )
+        db.commit()
+
+        response = client.get("/api/v1/weather/readings?limit=1", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "aemet_real"
+        assert data["mode"] == "real"
+        assert data["synthetic"] is False
+        assert data["lecturas"][0]["fuente"] == "aemet_real"
+
     def test_obtener_historico_clima(self, client, db, auth_headers):
         """Test endpoint /weather/historical"""
         response = client.get("/api/v1/weather/historical?dias_atras=30", headers=auth_headers)

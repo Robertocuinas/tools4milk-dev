@@ -1,13 +1,25 @@
 """Contratos explícitos para datos sintéticos y estimaciones experimentales."""
 
-from typing import Any
+from typing import Any, Literal
 
 
-def provenance(source: str) -> dict[str, Any]:
+CanonicalSource = Literal["generated", "aemet_real"]
+
+
+def canonical_source(source: str | None) -> CanonicalSource:
+    """Normaliza valores históricos al vocabulario público de provenance."""
+    normalized = (source or "").strip().lower()
+    if normalized in {"aemet", "aemet_real"}:
+        return "aemet_real"
+    return "generated"
+
+
+def provenance(source: str | None) -> dict[str, Any]:
     """Return a stable provenance marker suitable for API responses."""
-    synthetic = source == "generated"
+    canonical = canonical_source(source)
+    synthetic = canonical == "generated"
     return {
-        "source": source,
+        "source": canonical,
         "mode": "synthetic" if synthetic else "real",
         "synthetic": synthetic,
     }

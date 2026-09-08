@@ -151,6 +151,7 @@ class AemetClient:
             if existing:
                 for key, value in record.items():
                     setattr(existing, key, value)
+                existing.fuente = mode
                 updated += 1
                 continue
             db.add(LecturaMeteo(**record))
