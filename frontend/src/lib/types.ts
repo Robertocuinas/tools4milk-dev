@@ -73,7 +73,9 @@ export type AlertsResponse = {
   };
 };
 
-export type TaskStatus = "programada" | "ejecutada" | "retrasada" | "cancelada" | "pausada";
+/** Estado canónico; los valores legacy solo cubren respuestas Release 0. */
+export type CanonicalTaskStatus = "pendiente" | "en_curso" | "verificacion" | "completada";
+export type TaskStatus = CanonicalTaskStatus | "programada" | "ejecutada" | "retrasada" | "cancelada" | "pausada";
 
 export type TareaCatalogo = {
   id: string;
@@ -92,8 +94,14 @@ export type Task = {
   fecha_programada: string;
   fecha_ejecucion?: string | null;
   estado: TaskStatus;
+  estado_canonico?: CanonicalTaskStatus;
   ejecutado_por?: string | null;
   tiempo_ejecucion_minutos?: string | null;
+  duracion_estimada_min?: number | null;
+  duracion_real_min?: number | null;
+  prioridad?: number;
+  turno_id?: string | null;
+  fecha_fin?: string | null;
   resultado?: string | null;
   observaciones?: string | null;
   problemas_encontrados?: string | null;

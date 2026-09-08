@@ -20,6 +20,7 @@ from app.models.tools4milk import (
     Maquinaria,
     Pedido,
     ResumenRelevo,
+    SyntheticProvenance,
     TareaCatalogo,
     TareaEjecucion,
     TareaRecurrente,
@@ -58,6 +59,7 @@ __all__ = [
     "LecturaCarroMezclador",
     "LecturaRobotOrdeno",
     "ResumenRelevo",
+    "SyntheticProvenance",
     # Auth
     "RefreshToken",
     "Usuario",

@@ -395,6 +395,10 @@ class TareaEjecucion(Base):
     ts_planificada: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     ts_inicio: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ts_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duracion_estimada_min: Mapped[int | None] = mapped_column(Integer)
+    duracion_real_min: Mapped[int | None] = mapped_column(Integer)
+    prioridad: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
+    turno_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("turnos.id"))
     notas: Mapped[str | None] = mapped_column(Text)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -430,6 +434,24 @@ class AsignacionTurno(Base):
     empleado_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("empleados.id"), nullable=False)
     zona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zonas.id"))
     rol: Mapped[str | None] = mapped_column(String(80))
+
+
+class SyntheticProvenance(Base):
+    """Provenance inmutable de registros materializados desde el generador."""
+
+    __tablename__ = "synthetic_provenance"
+    __table_args__ = (UniqueConstraint("entity_type", "entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(80), nullable=False)
+    generator_version: Mapped[str] = mapped_column(String(30), nullable=False)
+    scenario_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    simulation_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict] = mapped_column(POSTGRES_JSON, nullable=False, default=dict)
 
 
 # ---------------------------------------------------------------------------

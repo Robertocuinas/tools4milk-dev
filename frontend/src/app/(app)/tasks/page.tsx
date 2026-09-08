@@ -31,11 +31,15 @@ const tabConfig: Record<FilterTab, { label: string; color: string; Icon: typeof 
 };
 
 const statusStyles: Record<TaskStatus, string> = {
+  pendiente: "bg-state-info/15 text-state-info",
+  en_curso: "bg-state-warning/15 text-state-warning",
+  verificacion: "bg-state-warning/15 text-state-warning",
+  completada: "bg-state-ok/15 text-state-ok",
   programada: "bg-state-info/15 text-state-info",
   ejecutada: "bg-state-ok/15 text-state-ok",
   retrasada: "bg-state-critica/15 text-state-critica",
-  cancelada: "bg-state-neutral/10 text-state-neutral",
-  pausada: "bg-state-atencion/15 text-state-atencion",
+  cancelada: "bg-muted text-muted-foreground",
+  pausada: "bg-state-warning/15 text-state-warning",
 };
 
 function StatusBadge({ estado }: { estado: TaskStatus }) {
