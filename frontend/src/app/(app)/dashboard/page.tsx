@@ -24,6 +24,7 @@ import { DonutStat, SparkArea } from "@/components/charts/MiniCharts";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { PanelCard } from "@/components/ui/panel-card";
+import { SyntheticMarker } from "@/components/ui/synthetic-marker";
 import { api } from "@/lib/api";
 import type { Incident, Lactation } from "@/lib/types";
 
@@ -123,6 +124,7 @@ export default function DashboardPage() {
           <RefreshCw className="h-3.5 w-3.5 text-brand" />
           Actualización cada 30 s
         </span>
+        <SyntheticMarker />
       </PageHeader>
 
       <div className="space-y-6 px-6 py-6 lg:px-8">

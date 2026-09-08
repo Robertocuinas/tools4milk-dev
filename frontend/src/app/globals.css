@@ -34,6 +34,10 @@
   --color-state-info:     #2563eb;
   --color-state-neutral:  #64748b;
 
+  /* Shared layout and interaction tokens */
+  --spacing-control: 2.75rem;
+  --focus-ring: 0 0 0 3px rgba(27, 94, 59, 0.28);
+
   /* ── Shadows ── */
   --shadow-brand:    0 18px 60px rgba(27, 94, 59, 0.28);
   --shadow-panel:    0 2px 8px rgba(0, 0, 0, 0.06);
@@ -86,12 +90,22 @@ button {
 }
 
 button, a, input, textarea, select {
-  outline-color: transparent;
+  outline-color: var(--brand);
 }
 
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 [aria-live] {

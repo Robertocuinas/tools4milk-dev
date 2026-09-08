@@ -55,8 +55,8 @@ export function TvRefreshStatus({ queries, className = "" }: TvRefreshStatusProp
   }
 
   return (
-    <div className={`flex items-center gap-2 text-xs text-tv-dim ${className}`}>
-      <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
+    <div role="status" aria-live="polite" className={`flex items-center gap-2 text-xs text-tv-dim ${className}`}>
+      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
       {label}
     </div>
   );

@@ -138,11 +138,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           la expiración (refreshSession fallido → store limpio + redirect). */}
       <SessionKeeper />
       {/* ── Sidebar ── */}
-      <aside className="flex w-56 shrink-0 flex-col border-r border-[#1e3a26] bg-[#0d1a10]">
+      <aside className="flex w-16 shrink-0 flex-col overflow-hidden border-r border-[#1e3a26] bg-[#0d1a10] md:w-56">
         {/* Logo */}
-        <div className="flex items-center gap-3 border-b border-[#1e3a26] px-4 py-4">
+        <div className="flex items-center justify-center gap-3 border-b border-[#1e3a26] px-2 py-4 md:justify-start md:px-4">
           <LogoMark />
-          <div className="min-w-0">
+          <div className="min-w-0 md:block hidden">
             <div className="font-heading text-[15px] font-bold leading-none text-white">
               Tools4 Milk
             </div>
@@ -163,7 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             return (
               <div key={group.label} className="mb-4">
                 {group.label && (
-                  <p className="mb-1 px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#4a7058]">
+                  <p className="mb-1 hidden px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#4a7058] md:block">
                     {group.label}
                   </p>
                 )}
@@ -173,7 +173,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={href}
                       href={href}
-                      className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-colors ${
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center justify-center gap-2.5 rounded-[10px] px-3 py-3 text-sm font-semibold transition-colors md:justify-start md:py-2.5 ${
                         active
                           ? "bg-[#1e3a26] text-[#35e479]"
                           : "text-[#7fa18d] hover:bg-[#1a2e1f] hover:text-white"
@@ -183,7 +184,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         className={`h-4 w-4 shrink-0 ${active ? "text-[#35e479]" : "text-[#4a7058]"}`}
                         strokeWidth={2}
                       />
-                      {label}
+                      <span className="hidden md:inline">{label}</span>
                     </Link>
                   );
                 })}
@@ -194,15 +195,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* User footer */}
         <div className="space-y-1.5 border-t border-[#1e3a26] px-2 py-3">
-          <Link href="/profile" className="block rounded-[10px] bg-[#132219] px-3 py-2.5 transition hover:bg-[#1a2e1f]">
-            <div className="truncate text-xs font-bold text-white">
+          <Link href="/profile" aria-label="Abrir perfil" className="block rounded-[10px] bg-[#132219] px-3 py-2.5 text-center transition hover:bg-[#1a2e1f] md:text-left">
+            <div className="hidden truncate text-xs font-bold text-white md:block">
               {user?.username ?? "Usuario"}
             </div>
-            <div className="mt-0.5 text-[11px] capitalize text-[#7fa18d]">
+            <div className="mt-0.5 hidden text-[11px] capitalize text-[#7fa18d] md:block">
               {roleDisplayName(role)}
             </div>
             {activeWorker && (
-              <div className="mt-1 flex items-center gap-1">
+              <div className="mt-1 hidden items-center gap-1 md:flex">
                 <span className="text-[9px] text-[#4a7058]">▸</span>
                 <span className="truncate text-[10px] font-semibold text-[#7fa18d]">
                   {activeWorker.name}
@@ -214,10 +215,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#7fa18d] transition hover:bg-[#3d1010]/40 hover:text-state-critica"
+            aria-label="Cerrar sesión"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#7fa18d] transition hover:bg-[#3d1010]/40 hover:text-state-critica md:justify-start"
           >
             <LogOut className="h-4 w-4" />
-            Cerrar sesión
+            <span className="hidden md:inline">Cerrar sesión</span>
           </button>
         </div>
       </aside>

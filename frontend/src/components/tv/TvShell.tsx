@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { TvClock, TvDate } from "@/components/tv/TvClock";
 import { TvRefreshStatus, type QueryStatusInfo } from "@/components/tv/TvRefreshStatus";
+import { SyntheticMarker } from "@/components/ui/synthetic-marker";
 import { useAppStore } from "@/store/app-store";
 
 type TvShellProps = {
@@ -63,6 +64,7 @@ export function TvShell({
           {queryStatuses && queryStatuses.length > 0 && (
             <TvRefreshStatus queries={queryStatuses} />
           )}
+          <SyntheticMarker className="hidden sm:inline-flex" />
           <div className="hidden text-right lg:block">
             <TvClock />
             <div className="mt-0.5">
