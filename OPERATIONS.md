@@ -67,6 +67,32 @@ El `-v` borra el volumen `postgres_data`. La próxima vez que arranque,
 aplicará las migraciones numeradas. Los usuarios demo solo se crean si
 `ENVIRONMENT=development` (o `demo`/`test`) y `INITIAL_DEMO_PASSWORD` no está vacío.
 
+### Auditoría de dependencias frontend
+
+Las versiones de Next.js y PostCSS se fijan deliberadamente en `frontend/package.json`
+y `frontend/package-lock.json`; no se debe ejecutar `npm audit fix --force`. El workflow
+de CI ejecuta `npm audit --omit=dev --audit-level=high`, que bloquea vulnerabilidades
+`high` o `critical` alcanzables en producción, y publica además el informe completo
+como artefacto para revisar el tooling.
+
+La remediación P0 actualiza Next.js a `16.3.4` (corrige los advisories de Next.js,
+incluidos `GHSA-p293-qw3h-jr36` y `GHSA-2xp9-vwfh-vxw4`) y PostCSS a `8.5.28`
+(corrige `GHSA-fxqj-rqcc-2cmp` y `GHSA-r28c-9q8g-f849`). El audit de producción
+queda sin findings `high`/`critical`; permanece un finding moderado de
+`baseline-browser-mapping` (`GHSA-w5vr-8v7q-w6rv`) transitivo de Next.js y
+Browserslist, sin impacto de ejecución de la aplicación.
+
+El audit completo puede seguir mostrando findings de desarrollo: `brace-expansion`
+(`GHSA-3jxr-9vmj-r5cp`, `GHSA-mh99-v99m-4gvg`, `GHSA-rgw5-rvv9-x895`) llega por
+`minimatch` usado por `@eslint/eslintrc`/TypeScript ESLint; `browserslist`
+(`GHSA-c83g-rgw3-j3cx`, `GHSA-73wf-gq98-2v4g`) llega por Autoprefixer/ESLint;
+`js-yaml` (`GHSA-h67p-54hq-rp68`, `GHSA-52cp-r559-cp3m`, `GHSA-5p4m-2wfm-xmqj`,
+`GHSA-2883-xcg3-v3hh`) llega por `@eslint/eslintrc`; y `@babel/core`
+(`GHSA-4x5r-pxfx-6jf8`) llega por `eslint-plugin-react-hooks`. Son herramientas
+ejecutadas durante lint/build, no se empaquetan en la imagen standalone ni se
+exponen al runtime. Se registran y se revisan con cada actualización de tooling;
+el gate de producción no los oculta.
+
 ### Poblar con datos de demo
 
 Con `ENVIRONMENT=development` y `INITIAL_DEMO_PASSWORD` no vacío, el backend

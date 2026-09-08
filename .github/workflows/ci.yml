@@ -146,3 +146,19 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Production dependency audit gate
+        run: npm audit --omit=dev --audit-level=high --json > npm-audit-production.json
+
+      - name: Full dependency audit report (development findings allowed)
+        run: npm audit --json > npm-audit-full.json || test "$?" -eq 1
+
+      - name: Upload dependency audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-reports
+          path: |
+            frontend/npm-audit-production.json
+            frontend/npm-audit-full.json
+          if-no-files-found: error
