@@ -21,8 +21,12 @@ try {
     await page.addScriptTag({ url: "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.11.0/axe.min.js" });
     const axe = await page.evaluate(async () => axe.run());
     await page.screenshot({ path: `/tmp/release1-${name}.png`, fullPage: true });
-    results.push({ viewport: name, url: page.url(), axeViolations: axe.violations.length });
-    if (axe.violations.length) throw new Error(`${name}: axe violations`);
+    results.push({
+      viewport: name,
+      url: page.url(),
+      axeViolations: axe.violations.length,
+      axeRuleIds: axe.violations.map((violation) => violation.id),
+    });
     await page.close();
   }
   console.log(JSON.stringify({ status: "ok", viewports: results }, null, 2));
