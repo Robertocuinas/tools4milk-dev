@@ -26,6 +26,30 @@ def install_openapi(app: FastAPI) -> None:
             "scheme": "bearer",
             "bearerFormat": "JWT",
         }
+        schemas = schema["components"].setdefault("schemas", {})
+        schemas["Provenance"] = {
+            "type": "object",
+            "required": ["source", "mode", "synthetic"],
+            "properties": {
+                "source": {"type": "string", "enum": ["generated", "aemet_real"]},
+                "mode": {"type": "string", "enum": ["synthetic", "real"]},
+                "synthetic": {"type": "boolean"},
+            },
+        }
+        schemas["HeuristicPredictionMetadata"] = {
+            "type": "object",
+            "required": ["provenance", "method", "validated", "limitations"],
+            "properties": {
+                "provenance": {"$ref": "#/components/schemas/Provenance"},
+                "method": {"type": "string", "enum": ["heuristic_arithmetic"]},
+                "validated": {"type": "boolean", "const": False},
+                "limitations": {"type": "array", "items": {"type": "string"}},
+            },
+        }
+        schema["info"]["description"] = (
+            f"{app.description}\n\nRelease 1: demo sintética. "
+            "Las lecturas generated y las predicciones heuristic_arithmetic no son producción ni validación de campo."
+        )
         app.openapi_schema = schema
         return app.openapi_schema
 

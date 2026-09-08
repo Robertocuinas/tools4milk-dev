@@ -5,6 +5,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.contracts import provenance
 from app.models.tools4milk import LecturaMeteo
 from app.routers.deps import AdminOnly, WeatherReader
 from app.security import get_current_user
@@ -26,7 +27,12 @@ _NO_DATA: dict[str, Any] = {
     "impacto_productivo": None,
     "fecha": None,
     "ubicacion": "Villalba, Lugo",
+    **provenance("generated"),
 }
+
+
+def _row_provenance(row: LecturaMeteo) -> dict[str, Any]:
+    return provenance(row.fuente or "generated")
 
 
 @router.get("/current")
@@ -37,6 +43,7 @@ def weather_current(db: Annotated[Session, Depends(get_db)], _user: WeatherReade
     if row is None:
         return _NO_DATA
     return {
+        **_row_provenance(row),
         "temperatura": float(row.temperatura_c) if row.temperatura_c is not None else None,
         "temperatura_actual": float(row.temperatura_c) if row.temperatura_c is not None else None,
         "humedad": float(row.humedad_relativa) if row.humedad_relativa is not None else None,
@@ -51,30 +58,11 @@ def weather_current(db: Annotated[Session, Depends(get_db)], _user: WeatherReade
 
 @router.get("/forecast")
 def weather_forecast(db: Annotated[Session, Depends(get_db)], _user: WeatherReader) -> dict[str, Any]:
-    """Returns up to 7 recent sensor readings ordered by timestamp.
-    NOTE: This is historical sensor data, not a real weather forecast.
-    Use /readings for a clearly-labelled version of the same data."""
-    rows = db.execute(
-        select(LecturaMeteo).order_by(LecturaMeteo.ts).limit(7)
-    ).scalars().all()
-    return {
-        "ubicacion": "Villalba, Lugo",
-        "dias": [
-            {
-                "fecha": row.ts.isoformat() if row.ts else None,
-                "temperatura_media": float(row.temperatura_c) if row.temperatura_c is not None else None,
-                "temperatura_maxima": None,
-                "temperatura_minima": None,
-                "humedad": float(row.humedad_relativa) if row.humedad_relativa is not None else None,
-                "precipitacion": float(row.precipitacion_mm) if row.precipitacion_mm is not None else None,
-                "prob_precipitacion_pct": float(row.prob_precipitacion_pct) if row.prob_precipitacion_pct is not None else None,
-                "viento": float(row.viento_km_h) if row.viento_km_h is not None else None,
-                "descripcion": None,
-                "fuente": "AEMET",
-            }
-            for row in rows
-        ],
-    }
+    """Deprecated compatibility route; it never returns a forecast."""
+    response = weather_readings(db, _user, limit=7, order="asc")
+    response.update({"deprecated": True, "is_forecast": False, "canonical_endpoint": "/weather/readings"})
+    response["dias"] = response.pop("lecturas")
+    return response
 
 
 @router.get("/readings")
@@ -94,6 +82,7 @@ def weather_readings(
     ).scalars().all()
     return {
         "ubicacion": "Villalba, Lugo",
+        **(provenance(rows[0].fuente or "generated") if rows else provenance("generated")),
         "total": len(rows),
         "order": order,
         "lecturas": [
@@ -106,6 +95,7 @@ def weather_readings(
                 "viento_km_h": float(row.viento_km_h) if row.viento_km_h is not None else None,
                 "direccion_viento": row.direccion_viento,
                 "estacion_id": row.estacion_id,
+                "fuente": row.fuente or "generated",
             }
             for row in rows
         ],
@@ -123,6 +113,7 @@ def weather_historical(
     ).scalars().all()
     return {
         "ubicacion": "Villalba, Lugo",
+        **(provenance(rows[0].fuente or "generated") if rows else provenance("generated")),
         "dias_atras": dias_atras,
         "datos": [
             {
@@ -130,7 +121,7 @@ def weather_historical(
                 "temperatura_media": float(row.temperatura_c) if row.temperatura_c is not None else None,
                 "humedad": float(row.humedad_relativa) if row.humedad_relativa is not None else None,
                 "descripcion": None,
-                "fuente": "AEMET",
+                "fuente": row.fuente or "generated",
             }
             for row in rows
         ],

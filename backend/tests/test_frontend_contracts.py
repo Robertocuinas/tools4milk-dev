@@ -50,9 +50,12 @@ def test_prediction_contract_matches_frontend(client, auth_headers):
     data = response.json()
     assert data["animal_id"] == "animal-001"
     assert data["timestamp"]
-    assert {"tendencia", "produccion_promedio_predicha", "confidence"} <= set(data["produccion"])
-    assert {"grasa", "proteina", "confidence"} <= set(data["composicion"])
-    assert {"riesgo_promedio", "confidence"} <= set(data["riesgo_sanitario"])
+    assert {"tendencia", "produccion_promedio_predicha"} <= set(data["produccion"])
+    assert {"grasa", "proteina"} <= set(data["composicion"])
+    assert {"riesgo_promedio"} <= set(data["riesgo_sanitario"])
+    assert data["method"] == "heuristic_arithmetic"
+    assert data["validated"] is False
+    assert data["provenance"]["source"] == "generated"
     assert data["_mock"] is False
 
 

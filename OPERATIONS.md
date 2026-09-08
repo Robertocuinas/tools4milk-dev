@@ -249,9 +249,12 @@ rotar `SECRET_KEY` tras un restore para forzar re-login.
   3. Si frontend y backend están en dominios distintos, ambos deben
      tener HTTPS (la cookie lleva `SameSite=Lax` y `Secure` en prod).
 
-**Las predicciones siempre devuelven confianza baja.**
+**Las predicciones son heurísticas experimentales, no ML.**
+- Las respuestas incluyen `method=heuristic_arithmetic`, `validated=false` y limitaciones explícitas.
+- No se muestra una confianza calibrada ni deben interpretarse como recomendación clínica o productiva.
+- La evaluación sintética no equivale a validación en campo.
 - El servicio de predicciones combina historial del animal + meteo.
-  Sin datos de lactación activa, la confianza baja al mínimo (ver
+  Sin datos de lactación activa, la estimación se degrada (ver
   el banner de `/predictions`). No es un bug, es el modelo.
 
 ---

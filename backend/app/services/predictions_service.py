@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.tools4milk import Alerta, TratamientoActivo
+from app.contracts import PREDICTION_LIMITATIONS, provenance
 from app.repositories import animals_repository, lactations_repository
 from app.time_utils import utc_now
 
@@ -46,13 +47,16 @@ def compute_prediction(db: Session, animal: Any) -> dict[str, Any]:
     return {
         "animal_id": str(animal.id),
         "timestamp": utc_now().isoformat(),
+        "provenance": provenance("generated"),
+        "method": "heuristic_arithmetic",
+        "validated": False,
+        "limitations": PREDICTION_LIMITATIONS,
         "produccion": {
             "tendencia": trend,
             "produccion_promedio_predicha": expected,
             "produccion_minima_predicha": round(expected * 0.93, 1),
             "produccion_maxima_predicha": round(expected * 1.07, 1),
             "dias_prediccion": 7,
-            "confidence": 0.82 if lactation else 0.45,
             "series_diaria": series,
         },
         "composicion": {
@@ -60,7 +64,7 @@ def compute_prediction(db: Session, animal: Any) -> dict[str, Any]:
             "proteina": {"prediccion": 0, "tendencia": "estable"},
             "lactosa": {"prediccion": 0, "tendencia": "estable"},
             "anomalia_detectada": False,
-            "confidence": 0.79 if lactation else 0.42,
+
         },
         "riesgo_sanitario": {
             "riesgo_promedio": risk_level,
@@ -71,10 +75,8 @@ def compute_prediction(db: Session, animal: Any) -> dict[str, Any]:
                 }
             },
             "factores_riesgo": risk_factors,
-            "confidence": 0.84 if lactation else 0.5,
             "dias_prediccion": 7,
         },
-        "confianza_integrada": 0.82 if lactation else 0.46,
         "_mock": False,
     }
 

@@ -45,7 +45,7 @@ class TestAEMETClient:
         assert registro is not None
         assert registro.fecha_hora is not None
         assert registro.ubicacion == "Villalba, Lugo"
-        assert registro.fuente == "AEMET"
+        assert registro.fuente == "generated"
         assert registro.latitud == 42.6447
         assert registro.longitud == -8.1278
 
@@ -85,13 +85,24 @@ class TestWeatherEndpoints:
         assert data["ubicacion"] == "Villalba, Lugo"
 
     def test_obtener_prediccion_7dias(self, client, db, auth_headers):
-        """Test endpoint /weather/forecast"""
+        """Compatibility route is explicitly historical, never a forecast."""
         response = client.get("/api/v1/weather/forecast", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
         assert "ubicacion" in data
         assert "dias" in data or data["dias"] == []
+        assert data["deprecated"] is True
+        assert data["is_forecast"] is False
+        assert data["canonical_endpoint"] == "/weather/readings"
+
+    def test_lecturas_historicas_exponen_provenance(self, client, auth_headers):
+        response = client.get("/api/v1/weather/readings", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "generated"
+        assert data["mode"] == "synthetic"
+        assert data["synthetic"] is True
 
     def test_obtener_historico_clima(self, client, db, auth_headers):
         """Test endpoint /weather/historical"""

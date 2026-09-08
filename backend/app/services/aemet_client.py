@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -6,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.contracts import provenance
 from app.logging_utils import redact_configured_secret
 from app.models.datos_metereologicos import DatosMetereologicos
 from app.models.tools4milk import LecturaMeteo
@@ -30,12 +32,12 @@ class AemetClient:
     longitud = -8.1278
 
     async def sincronizar_datos(self, db: Session) -> dict[str, object]:
-        """Synchronize weather data. Falls back to synthetic data if API key is missing or API fails.
+        """Synchronize real AEMET data or explicitly generated demo data.
         
         Returns:
             dict with keys:
             - status: "success" or "error"
-            - modo: "aemet_real", "generated", or "aemet_real" (error case)
+            - modo: "aemet_real" or "generated"
             - registros_insertados: count of new records
             - registros_actualizados: count of updated records
             - error: error message if status is "error"
@@ -49,6 +51,7 @@ class AemetClient:
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             return {
                 "status": "error",
+                **provenance("aemet_real"),
                 "modo": "aemet_real",
                 "error": redact_configured_secret(exc, settings.aemet_api_key) or exc.__class__.__name__,
                 "registros_insertados": 0,
@@ -77,16 +80,14 @@ class AemetClient:
         endpoint = f"{self.api_base_url}/prediccion/especifica/municipio/diaria/{settings.aemet_municipio_id}"
         headers = {"cache-control": "no-cache"}
         params = {"api_key": settings.aemet_api_key}
-        async with httpx.AsyncClient(timeout=20) as client:
-            metadata_response = await client.get(endpoint, params=params, headers=headers)
-            metadata_response.raise_for_status()
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
+            metadata_response = await self._get_with_backoff(client, endpoint, params=params, headers=headers)
             metadata = metadata_response.json()
             data_url = metadata.get("datos")
-            if not data_url:
+            if not isinstance(data_url, str) or not data_url:
                 raise ValueError(metadata.get("descripcion") or "AEMET no devolvio URL de datos")
 
-            data_response = await client.get(data_url, headers=headers)
-            data_response.raise_for_status()
+            data_response = await self._get_with_backoff(client, data_url, headers=headers)
             payload = data_response.json()
 
         municipality = payload[0] if isinstance(payload, list) and payload else payload
@@ -119,6 +120,23 @@ class AemetClient:
             "viento_km_h": viento_km_h,
         }
 
+    async def _get_with_backoff(self, client: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        """Retry transient AEMET failures without turning them into fake real data."""
+        for attempt in range(3):
+            response = await client.get(url, **kwargs)
+            if response.status_code != 429 and response.status_code < 500:
+                response.raise_for_status()
+                return response
+            if attempt == 2:
+                response.raise_for_status()
+            retry_after = response.headers.get("retry-after")
+            try:
+                delay = min(float(retry_after), 8.0) if retry_after else 2**attempt
+            except ValueError:
+                delay = 2**attempt
+            await asyncio.sleep(delay)
+        raise RuntimeError("AEMET request retries exhausted")
+
     def _upsert_records(self, db: Session, records: list[dict[str, Any]], mode: str = "aemet_real") -> dict[str, object]:
         inserted = 0
         updated = 0
@@ -146,7 +164,7 @@ class AemetClient:
                     ubicacion=self.location_name,
                     latitud=self.latitud,
                     longitud=self.longitud,
-                    fuente="AEMET",
+                    fuente=mode,
                 )
             )
             inserted += 1
@@ -154,6 +172,7 @@ class AemetClient:
         db.commit()
         return {
             "status": "success",
+            **provenance(mode),
             "modo": mode,
             "registros_insertados": inserted,
             "registros_actualizados": updated,

@@ -142,6 +142,9 @@ function PredictionCard({
 
       {prediction && prod ? (
         <div className="mt-4 space-y-3">
+          <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/10 px-3 py-2 text-[11px] font-semibold text-state-atencion">
+            Demo sintética · heurística aritmética · no validada en campo · no es recomendación clínica/productiva
+          </div>
           <div className="rounded-[10px] bg-app-bg p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-app-dim">

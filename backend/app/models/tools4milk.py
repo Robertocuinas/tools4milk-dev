@@ -495,6 +495,7 @@ class LecturaMeteo(Base):
     viento_km_h: Mapped[Decimal | None] = mapped_column(Numeric(5, 1))
     direccion_viento: Mapped[int | None] = mapped_column(SmallInteger)
     radiacion_wm2: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    fuente: Mapped[str] = mapped_column(String(40), nullable=False, default="generated")
     # indice_thermo_humedad es GENERATED ALWAYS AS STORED en PostgreSQL — solo lectura
 
 
