@@ -1,5 +1,42 @@
 # Changelog
 
+## Release 3 — Demo portable y reproducible (base, en curso)
+
+### Añadido
+
+- `.env.example` raíz (placeholders `CAMBIAME-…`, comentarios en español,
+  AEMET opcional) y `python scripts/demo.py` como único punto de entrada
+  multiplataforma (solo biblioteca estándar): `init|up|status|smoke|reset|down`,
+  proyecto Compose aislado `tfm_r3_demo`, `--dry-run` y confirmaciones para
+  operaciones destructivas.
+- Smoke reproducible: `/health` público, login demo con cookie en memoria,
+  `/auth/me`, estado del scheduler y reset sintético, sin rastro residual.
+- `docs/RELEASE3.md` y quickstart único de 5 minutos en README/OPERATIONS.
+
+### Corregido
+
+- OPERATIONS: migraciones `0000..0012`, 5 servicios, TTL access 8 h,
+  matriz de puertos/URLs base + overrides, backup con usuario real
+  (`postgres`), generación de secretos portable (sin OpenSSL),
+  Playwright/axe Release 2 ya implementados.
+- `docs/RELEASE2_IMPLEMENTATION.md`: cifra certificada 114 tests.
+
+## Release 2 — READY (modo degradado sintético certificado)
+
+### Añadido
+
+- Mutaciones de tareas idempotentes (`X-Operation-Id` + `expected_version`,
+  tabla `operation_dedupe`, 409 ante replay divergente o versión obsoleta).
+- Outbox IndexedDB (`tools4milk-release2`) con backoff acotado y pausa ante 401.
+- 3 specs Playwright (`release2-contract` con axe, `release2-full-matrix-cert`,
+  `release2-offline-cert-independent`).
+- Migración `0012_release2_resilience.sql`.
+
+### Verificación
+
+- Backend: 114 tests pytest. Frontend: typecheck + lint + build sin errores.
+- Datos solo sintéticos (`synthetic/generated`); TV sigue solo lectura.
+
 ## Release 1 — baseline sintética
 
 ### Añadido

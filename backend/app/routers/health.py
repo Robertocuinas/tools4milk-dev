@@ -5,17 +5,28 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.usuario import Usuario
+from app.security import require_roles
 
 router = APIRouter(prefix="/api/v1/health", tags=["Health"])
 
 
 @router.get("/db")
-def db_health(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    """Database connectivity probe. Dialect-agnostic.
+def db_health(
+    db: Annotated[Session, Depends(get_db)],
+    _admin: Annotated[Usuario, Depends(require_roles("admin"))],
+) -> dict[str, Any]:
+    """Database connectivity probe. Solo `admin`.
 
-    Antes la consulta a ``information_schema.tables`` reventaba con
-    ``OperationalError`` en SQLite. Ahora detecta el dialecto del engine
-    y usa la vista adecuada (``information_schema`` para Postgres,
+    Ejecuta queries reales (conteo de tablas y de `zonas`), por eso exige
+    usuario autenticado con rol `admin`: 401 sin credenciales, 403 con rol
+    no-admin. `/health` (raíz) sigue público para liveness.
+    La respuesta es útil para diagnóstico sin filtrar secretos: dialecto,
+    resultado de `SELECT 1`, conteos — nunca DSNs, passwords ni tokens.
+
+    Dialect-agnostic: antes la consulta a ``information_schema.tables``
+    reventaba con ``OperationalError`` en SQLite. Ahora detecta el dialecto
+    del engine y usa la vista adecuada (``information_schema`` para Postgres,
     ``sqlite_master`` para SQLite).
     """
     result = db.execute(text("SELECT 1")).scalar()

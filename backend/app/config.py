@@ -16,12 +16,19 @@ class Settings(BaseSettings):
     # forma explícita mediante .env/Compose; producción los valida al arrancar.
     secret_key: str = ""
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60
+    # Contrato canónico Release 3: access token de 8 h (480 min), alineado
+    # con la cookie HttpOnly `t4m_token` (`AUTH_COOKIE_MAX_AGE_SECONDS`) y
+    # con la documentación (README/OPERATIONS/docs/RELEASE3). El default
+    # vive aquí —ningún entorno (incluida producción) depende de la variable
+    # demo `ACCESS_TOKEN_EXPIRE_MINUTES` para obtenerlo; la demo solo lo
+    # fija explícitamente en `.env` por claridad. El refresh no se alarga
+    # (sigue en `refresh_token_expire_days`, 30 d).
+    access_token_expire_minutes: int = 480
 
     # Refresh tokens (R12) — persistidos con estado para soportar
-    # rotación y revocación. El access token sigue siendo un JWT de vida
-    # corta (access_token_expire_minutes); el refresh vive más tiempo y
-    # se rota en cada /auth/refresh.
+    # rotación y revocación. El access token es un JWT de 8 h
+    # (`access_token_expire_minutes`, canónico 480); el refresh vive más
+    # tiempo y se rota en cada /auth/refresh.
     refresh_token_expire_days: int = 30
     refresh_token_max_per_user: int = 5
 

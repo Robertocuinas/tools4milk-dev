@@ -93,7 +93,34 @@ La entrega incluye:
 La guía de arranque, reset, generación y reconstrucción está en
 [`OPERATIONS.md`](OPERATIONS.md). El alcance, los límites y la matriz de
 verificación de la entrega están en [`docs/RELEASE1.md`](docs/RELEASE1.md).
+
+## Quickstart demo portable (Release 3, 5 minutos)
+
+Requisitos: **Python 3.12+** y **Docker Desktop** (con `docker compose` v2).
+Puertos libres en el host: `80`, `3000`, `5432`, `8000`.
+
+```bash
+git clone https://github.com/Robertocuinas/tools4milk-dev.git
+cd tools4milk-dev
+python scripts/demo.py init     # genera `.env` local con secretos aleatorios
+python scripts/demo.py up       # levanta el stack aislado `tfm_r3_demo`
+python scripts/demo.py smoke    # verificación reproducible (health, login, reset)
+```
+
+- App: http://localhost · API: http://localhost:8000 · Swagger: http://localhost:8000/docs
+- Login demo: usuario `admin`, contraseña en tu `.env` local
+  (`INITIAL_DEMO_PASSWORD`; ábrelo en tu editor, no lo pegues en logs).
+- Access token: 8 h en cookie HttpOnly (`t4m_token`); refresh: 30 días
+  (`t4m_refresh`, SameSite=Strict).
+- Apagar: `python scripts/demo.py down` (solo toca el proyecto `tfm_r3_demo`;
+  con `--volumes` borra también sus datos, pidiendo confirmación).
+- Detalle operativo, matriz de puertos/URLs y troubleshooting:
+  [`OPERATIONS.md`](OPERATIONS.md) y [`docs/RELEASE3.md`](docs/RELEASE3.md).
+
+Release 2 está READY (114 tests backend, 3 specs Playwright + axe);
+Release 3 añade esta demo portable. Todo sintético/ficticio con
+provenance `synthetic/generated`: no PII, no producción.
 2.4.	Selección tecnológica y diseño de la arquitectura
 La selección del stack tecnológico se fundamentó en criterios de madurez, comunidad, ecosistema de bibliotecas y adecuación a los requisitos del proyecto. Para el backend se eligió Python con el framework FastAPI, por su soporte nativo de programación asíncrona (ASGI), generación automática de documentación OpenAPI/Swagger y validación de datos integrada mediante Pydantic. Para la base de datos se seleccionó PostgreSQL, por su robustez, soporte de tipos JSONB para datos semi-estructurados y amplia comunidad. Para el frontend se eligió Next.js con React, junto con Zustand para la gestión de estado y TanStack Query para la comunicación con la API. El diseño visual se implementó con TailwindCSS.
 
-El sistema adopta una arquitectura monolítica modular desplegada mediante contenedores Docker. A diferencia de aproximaciones basadas en microservicios, se optó por una única aplicación backend que concentra toda la lógica de negocio, simplificando el despliegue y el mantenimiento en el contexto de un MVP. La comunicación entre frontend y backend se realiza exclusivamente a través de una API REST protegida por tokens JWT. La infraestructura de despliegue se orquesta mediante Docker Compose con cuatro servicios containerizados: base de datos, backend, frontend y proxy inverso.
+El sistema adopta una arquitectura monolítica modular desplegada mediante contenedores Docker. A diferencia de aproximaciones basadas en microservicios, se optó por una única aplicación backend que concentra toda la lógica de negocio, simplificando el despliegue y el mantenimiento en el contexto de un MVP. La comunicación entre frontend y backend se realiza exclusivamente a través de una API REST protegida por tokens JWT. La infraestructura de despliegue se orquesta mediante Docker Compose con cinco servicios containerizados: base de datos, backend, frontend, scheduler sintético y proxy inverso.

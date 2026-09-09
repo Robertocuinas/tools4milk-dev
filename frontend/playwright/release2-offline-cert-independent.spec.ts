@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { requireDemoPassword } from "./demo-credentials";
 
 test("independent Chromium offline persistence and storage contract", async ({ browser }) => {
+  const password = requireDemoPassword();
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator('input[autocomplete="username"]').fill("admin");
-  await page.locator('input[autocomplete="current-password"]').fill("testpass123");
+  await page.locator('input[autocomplete="current-password"]').fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await page.waitForURL(/dashboard/);
   await page.goto("/leanfarming", { waitUntil: "networkidle" });

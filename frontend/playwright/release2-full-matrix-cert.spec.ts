@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { requireDemoPassword } from "./demo-credentials";
 
-const password = "testpass123";
 test("Release 2 complete offline/API/browser matrix", async ({ browser }) => {
+  const password = requireDemoPassword();
   const context = await browser.newContext();
   const page = await context.newPage();
 
@@ -48,6 +49,11 @@ test("Release 2 complete offline/API/browser matrix", async ({ browser }) => {
   await contextTwo.close();
 
   await page.getByRole("button", { name: "Lista" }).click();
+  // El seed canonico R3 (scheduler small/normal) materializa tareas
+  // programadas sin retrasadas, y la vista Lista abre por defecto en la
+  // pestana "Retrasadas" (vacia). Se selecciona "Programadas" para ejercer
+  // el flujo offline sobre tareas completables del seed, sin cambiar asserts.
+  await page.getByRole("button", { name: /Programadas/ }).click();
   await expect(page.locator('button[title="Completar tarea"]').first()).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByRole("status")).toContainText(/Sin conexión/);
@@ -123,6 +129,7 @@ test("Release 2 complete offline/API/browser matrix", async ({ browser }) => {
 });
 
 test("IndexedDB unavailable shows explicit degraded mode", async ({ browser }) => {
+  const password = requireDemoPassword();
   const context = await browser.newContext();
   await context.addInitScript(() => {
     Object.defineProperty(window, "indexedDB", { configurable: false, get: () => undefined });

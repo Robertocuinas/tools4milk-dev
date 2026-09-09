@@ -134,7 +134,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -146,6 +146,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Build (portable standalone)
+        run: npm run build
 
       - name: Production dependency audit gate
         run: npm audit --omit=dev --audit-level=high --json > npm-audit-production.json
@@ -162,3 +165,91 @@ jobs:
             frontend/npm-audit-production.json
             frontend/npm-audit-full.json
           if-no-files-found: error
+
+  portable:
+    name: Portable R3 (compose config + builds + CLI + OpenAPI + specs)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite:///:memory:"
+      SECRET_KEY: "ci-secret-key-not-for-production-aaaaaaaaaaaaaaa"
+      INITIAL_DEMO_PASSWORD: "testpass123"
+      ENVIRONMENT: "development"
+      AEMET_API_KEY: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose interpolation (demo project)
+        run: docker compose -p tfm_r3_ci -f docker-compose.yml config --quiet
+
+      - name: Build backend image (non-root runtime)
+        run: docker build ./backend -t tfm-r3-backend-ci --label tfm_r3_ci=true
+
+      - name: Build frontend image (Node 24 standalone)
+        run: docker build ./frontend -t tfm-r3-frontend-ci --label tfm_r3_ci=true
+
+      - name: Verify backend image runs as non-root
+        run: |
+          docker run --rm --entrypoint whoami tfm-r3-backend-ci | tee /tmp/whoami.txt
+          grep -qx "appuser" /tmp/whoami.txt
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: CLI unit tests (scripts/demo.py, stdlib only)
+        run: python -m pytest tests/test_demo_cli.py -v --tb=short
+
+      - name: OpenAPI deterministic snapshot + diff gate
+        working-directory: backend
+        run: |
+          python - <<'EOF'
+          import hashlib, json
+          from fastapi.testclient import TestClient
+          from app.main import app
+          snaps = []
+          for _ in range(2):
+              with TestClient(app) as client:
+                  snaps.append(client.get("/openapi.json").json())
+          a = json.dumps(snaps[0], sort_keys=True, ensure_ascii=False)
+          b = json.dumps(snaps[1], sort_keys=True, ensure_ascii=False)
+          assert a == b, "openapi.json no es determinista entre dos generaciones"
+          open("openapi.r3.json", "w", encoding="utf-8").write(a + "\n")
+          print("openapi sha256:", hashlib.sha256(a.encode()).hexdigest())
+          # Contrato R3: health/db protegido (401 sin auth en el schema de seguridad global no aplica;
+          # el endpoint declara dependencia de admin — verificar presencia de la ruta).
+          assert "/api/v1/health/db" in snaps[0]["paths"], "falta /api/v1/health/db en OpenAPI"
+          EOF
+
+      - name: Upload OpenAPI snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-r3
+          path: backend/openapi.r3.json
+          if-no-files-found: error
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Validate Playwright specs (list only; full run is local gate)
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright test --list
+          npx playwright --version
+    # NOTA: el gate E2E completo (stack `docker compose -p tfm_r3_demo up` +
+    # `python scripts/demo.py smoke` + `npx playwright test` con axe) es
+    # intencionadamente local — ver docs/RELEASE3.md "Gate E2E completo
+    # (local)". CI valida que las specs compilan/listan sin fingir ejecución.
