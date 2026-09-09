@@ -182,6 +182,7 @@ async function request<T>(path: string, init: RequestInit = {}, params?: QueryPa
     try {
       const payload = await response.json();
       if (typeof payload.detail === "string") detail = payload.detail;
+      else if (payload.detail?.message) detail = `${payload.detail.code ?? response.status}: ${payload.detail.message}`;
     } catch {
       // Keep the HTTP fallback message.
     }
@@ -284,6 +285,14 @@ export const api = {
 
   updateTask(taskId: string, body: Partial<Task>) {
     return request<Task>(`/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+
+  updateTaskIdempotent(taskId: string, body: Partial<Task>, expectedVersion: number, operationId: string) {
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${taskId}`, {
+      method: "PUT",
+      headers: { "X-Operation-Id": operationId },
+      body: JSON.stringify({ ...body, expected_version: expectedVersion }),
+    });
   },
 
   deleteTask(taskId: string) {

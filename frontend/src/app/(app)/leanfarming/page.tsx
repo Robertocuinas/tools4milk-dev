@@ -23,6 +23,7 @@ import { WeeklyPlanView } from "@/components/leanfarming/WeeklyPlanView";
 import { ZonePlanView } from "@/components/leanfarming/ZonePlanView";
 import { WorkloadView } from "@/components/leanfarming/WorkloadView";
 import { TaskCatalogView } from "@/components/leanfarming/TaskCatalogView";
+import { ConnectivityBanner } from "@/components/leanfarming/ConnectivityBanner";
 import { api } from "@/lib/api";
 import { TV_REFETCH, TV_STALE } from "@/lib/tv-constants";
 import { visualZoneSummaries } from "@/lib/visual-zones";
@@ -426,6 +427,7 @@ export default function LeanFarmingPage() {
 
   return (
     <div className="min-h-full bg-app-bg text-app-text">
+      <ConnectivityBanner />
       <div className="border-b border-app-border px-6 py-5 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

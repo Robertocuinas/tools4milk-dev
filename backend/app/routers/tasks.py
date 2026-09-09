@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -211,16 +211,38 @@ def task_detail(task_id: str, db: DbSession) -> dict[str, Any]:
 
 
 @router.put("/tasks/{task_id}")
-def update_task(task_id: str, payload: dict[str, Any], db: DbSession, _user: TaskManager) -> dict[str, Any]:
+def update_task(
+    task_id: str,
+    payload: dict[str, Any],
+    db: DbSession,
+    _user: TaskManager,
+    operation_id: str | None = Header(default=None, alias="X-Operation-Id"),
+) -> dict[str, Any]:
     row = tasks_repository.get_by_id(db, task_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    if operation_id is None:
+        try:
+            ejecucion, catalogo = tasks_repository.update(db, row[0], payload)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return tasks_service.serialize(ejecucion, catalogo)
+
     try:
-        ejecucion, catalogo = tasks_repository.update(db, row[0], payload)
+        parsed_operation_id = uuid.UUID(operation_id)
     except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "invalid_operation_id", "message": "X-Operation-Id debe ser UUID"}) from exc
+    try:
+        response, replayed = tasks_repository.update_idempotent(
+            db, row[0], payload, _user.id, parsed_operation_id, f"/api/v1/tasks/{task_id}"
+        )
+    except tasks_repository.IdempotencyConflict as exc:
         db.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return tasks_service.serialize(ejecucion, catalogo)
+        status_code = 409 if exc.code in {"stale_version", "operation_payload_mismatch"} else 422
+        raise HTTPException(status_code=status_code, detail=exc.payload.get("error", exc.payload)) from exc
+    response["replayed"] = replayed
+    return response
 
 
 @router.delete("/tasks/{task_id}", status_code=204)

@@ -40,4 +40,6 @@ def serialize(ejecucion: TareaEjecucion, catalogo: TareaCatalogo | None) -> dict
         "motivo_retraso": None,
         "requiere_seguimiento": ejecucion.estado in {EstadoTarea.VENCIDA},
         "fecha_seguimiento": None,
+        "version": ejecucion.version,
+        "updated_at": ejecucion.updated_at.isoformat() if ejecucion.updated_at else None,
     }
