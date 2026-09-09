@@ -226,9 +226,6 @@ def update_task(
     _user: TaskManager,
     operation_id: str | None = Header(default=None, alias="X-Operation-Id"),
 ) -> dict[str, Any]:
-    row = tasks_repository.get_by_id(db, task_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada")
     if operation_id is None:
         raise HTTPException(
             status_code=428,
@@ -240,9 +237,13 @@ def update_task(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"code": "invalid_operation_id", "message": "X-Operation-Id debe ser UUID"}) from exc
     try:
-        response, replayed = tasks_repository.update_idempotent(
-            db, row[0], payload, _user.id, parsed_operation_id, f"/api/v1/tasks/{task_id}"
-        )
+        with tasks_repository.operation_lock(_user.id, parsed_operation_id):
+            row = tasks_repository.get_by_id(db, task_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="Tarea no encontrada")
+            response, replayed = tasks_repository.update_idempotent(
+                db, row[0], payload, _user.id, parsed_operation_id, f"/api/v1/tasks/{task_id}"
+            )
     except tasks_repository.IdempotencyConflict as exc:
         db.rollback()
         status_code = 409 if exc.code in {"stale_version", "operation_payload_mismatch"} else 422
@@ -259,9 +260,6 @@ def delete_task(
     expected_version: int | None = None,
     operation_id: str | None = Header(default=None, alias="X-Operation-Id"),
 ) -> None:
-    row = tasks_repository.get_by_id(db, task_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada")
     if operation_id is None:
         raise HTTPException(status_code=428, detail={"code": "operation_id_required", "message": "X-Operation-Id es obligatorio para mutaciones Release 2"})
     try:
@@ -271,7 +269,11 @@ def delete_task(
     if expected_version is None or expected_version <= 0:
         raise HTTPException(status_code=422, detail={"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo"})
     try:
-        tasks_repository.delete_idempotent(db, row[0], _user.id, parsed_operation_id, expected_version, f"/api/v1/tasks/{task_id}")
+        with tasks_repository.operation_lock(_user.id, parsed_operation_id):
+            row = tasks_repository.get_by_id(db, task_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="Tarea no encontrada")
+            tasks_repository.delete_idempotent(db, row[0], _user.id, parsed_operation_id, expected_version, f"/api/v1/tasks/{task_id}")
     except tasks_repository.IdempotencyConflict as exc:
         db.rollback()
         status_code = 409 if exc.code in {"stale_version", "operation_payload_mismatch"} else 422

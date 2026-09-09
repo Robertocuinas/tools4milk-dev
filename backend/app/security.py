@@ -333,6 +333,14 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
     if not user.activo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
+    # La dependencia comparte esta sesión con el endpoint. Finalizar la
+    # transacción de lectura devuelve la conexión al pool mientras la petición
+    # espera su single-flight de operación; el endpoint la reacquirirá al
+    # ejecutar su primera consulta. Sin esto, una ráfaga same-key puede llenar
+    # el pool durante la autenticación antes de alcanzar el lock de operación.
+    db.expire_on_commit = False
+    db.commit()
+    db.expunge(user)
     return user
 
 

@@ -27,7 +27,7 @@ const SNAPSHOTS = "task_snapshots";
 const META = "sync_meta";
 
 function supported(): boolean {
-  return typeof window !== "undefined" && "indexedDB" in window && typeof crypto?.randomUUID === "function";
+  return typeof window !== "undefined" && typeof indexedDB !== "undefined" && typeof crypto?.randomUUID === "function";
 }
 
 function openDb(): Promise<IDBDatabase> {

@@ -1,0 +1,27 @@
+services:
+  db:
+    container_name: tfm-ca0-db
+    ports: !override
+      - "127.0.0.1:15442:5432"
+    volumes:
+      - tfm_ca0_postgres_data:/var/lib/postgresql/data
+  backend:
+    container_name: tfm-ca0-backend
+    ports: !override
+      - "127.0.0.1:18042:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/tools4milk
+      INITIAL_DEMO_PASSWORD: testpass123
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    container_name: tfm-ca0-frontend
+    ports: !override
+      - "127.0.0.1:13042:3000"
+  nginx:
+    container_name: tfm-ca0-nginx
+    ports: !override
+      - "127.0.0.1:18082:80"
+volumes:
+  tfm_ca0_postgres_data:

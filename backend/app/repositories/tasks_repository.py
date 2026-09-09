@@ -1,13 +1,54 @@
 import hashlib
 import json
+import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from collections.abc import Iterator
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.enums import EstadoTarea, ESTADOS_TAREA_CANONICOS, TRANSICIONES_TAREA
 from app.models.tools4milk import OperationDedupe, TareaEjecucion, TareaCatalogo
+
+
+_operation_locks_guard = threading.Lock()
+_operation_locks: dict[str, tuple[threading.RLock, int]] = {}
+
+
+@contextmanager
+def operation_lock(actor_user_id: uuid.UUID, operation_id: uuid.UUID) -> Iterator[None]:
+    """Coalesce same-operation requests before they acquire a DB connection.
+
+    PostgreSQL's advisory lock remains authoritative across processes. This
+    process-local lock prevents a same-key burst from filling the SQLAlchemy
+    pool while every request waits for that advisory lock.
+    """
+    key = f"{actor_user_id}:{operation_id}"
+    with _operation_locks_guard:
+        entry = _operation_locks.get(key)
+        if entry is None:
+            lock = threading.RLock()
+            ref_count = 0
+        else:
+            lock, ref_count = entry
+        _operation_locks[key] = (lock, ref_count + 1)
+
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+        with _operation_locks_guard:
+            current = _operation_locks.get(key)
+            if current is None:
+                return
+            current_lock, ref_count = current
+            if ref_count <= 1:
+                _operation_locks.pop(key, None)
+            else:
+                _operation_locks[key] = (current_lock, ref_count - 1)
 
 
 def get_all(
@@ -117,41 +158,43 @@ def update_idempotent(db: Session, item: TareaEjecucion, data: dict, actor_user_
     """Aplica una mutación y persiste su respuesta exacta de forma atómica."""
     from app.services.tasks_service import serialize
 
-    digest = request_hash("PUT", path, data)
-    existing = find_dedupe(db, actor_user_id, operation_id)
-    if existing is not None:
-        if existing.request_hash != digest:
-            body = {"error": {"code": "operation_payload_mismatch", "message": "La operación ya existe con otro payload", "operation_id": str(operation_id)}}
-            raise IdempotencyConflict("operation_payload_mismatch", body["error"]["message"], body)
-        if existing.response_status != 200:
-            error = existing.response_body.get("error", {})
-            raise IdempotencyConflict(str(error.get("code", "operation_rejected")), str(error.get("message", "Operación rechazada")), existing.response_body)
-        return existing.response_body, True
+    with operation_lock(actor_user_id, operation_id):
+        digest = request_hash("PUT", path, data)
+        existing = find_dedupe(db, actor_user_id, operation_id)
+        if existing is not None:
+            if existing.request_hash != digest:
+                body = {"error": {"code": "operation_payload_mismatch", "message": "La operación ya existe con otro payload", "operation_id": str(operation_id)}}
+                raise IdempotencyConflict("operation_payload_mismatch", body["error"]["message"], body)
+            if existing.response_status != 200:
+                error = existing.response_body.get("error", {})
+                raise IdempotencyConflict(str(error.get("code", "operation_rejected")), str(error.get("message", "Operación rechazada")), existing.response_body)
+            db.commit()
+            return existing.response_body, True
 
-    locked = db.scalar(select(TareaEjecucion).where(TareaEjecucion.id == item.id).with_for_update())
-    if locked is None:
-        body = {"error": {"code": "not_found", "message": "Tarea no encontrada", "operation_id": str(operation_id)}}
-        raise IdempotencyConflict("not_found", body["error"]["message"], body)
-    expected = data.get("expected_version")
-    if not isinstance(expected, int) or isinstance(expected, bool) or expected <= 0:
-        body = {"error": {"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo", "operation_id": str(operation_id)}}
-        raise IdempotencyConflict("invalid_expected_version", body["error"]["message"], body)
-    if locked.version != expected:
-        resource = {"id": str(locked.id), "version": locked.version, "estado_canonico": _canonical_state(locked.estado).value}
-        body = {"error": {"code": "stale_version", "message": "La tarea cambió mientras estaba pendiente", "operation_id": str(operation_id), "resource": resource, "expected_version": expected}}
-        db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="rejected", response_status=409, response_body=body))
+        locked = db.scalar(select(TareaEjecucion).where(TareaEjecucion.id == item.id).with_for_update())
+        if locked is None:
+            body = {"error": {"code": "not_found", "message": "Tarea no encontrada", "operation_id": str(operation_id)}}
+            raise IdempotencyConflict("not_found", body["error"]["message"], body)
+        expected = data.get("expected_version")
+        if not isinstance(expected, int) or isinstance(expected, bool) or expected <= 0:
+            body = {"error": {"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo", "operation_id": str(operation_id)}}
+            raise IdempotencyConflict("invalid_expected_version", body["error"]["message"], body)
+        if locked.version != expected:
+            resource = {"id": str(locked.id), "version": locked.version, "estado_canonico": _canonical_state(locked.estado).value}
+            body = {"error": {"code": "stale_version", "message": "La tarea cambió mientras estaba pendiente", "operation_id": str(operation_id), "expected_version": expected, "resource": resource}}
+            db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="rejected", response_status=409, response_body=body))
+            db.commit()
+            raise IdempotencyConflict("stale_version", body["error"]["message"], body)
+
+        _apply_update(locked, {key: value for key, value in data.items() if key != "expected_version"})
+        locked.version += 1
+        locked.updated_at = datetime.now(tz=timezone.utc)
+        db.flush()
+        catalogo = db.get(TareaCatalogo, locked.catalogo_id)
+        body = {"operation_id": str(operation_id), "replayed": False, "task": serialize(locked, catalogo)}
+        db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="applied", response_status=200, response_body=body))
         db.commit()
-        raise IdempotencyConflict("stale_version", body["error"]["message"], body)
-
-    _apply_update(locked, {key: value for key, value in data.items() if key != "expected_version"})
-    locked.version += 1
-    locked.updated_at = datetime.now(tz=timezone.utc)
-    db.flush()
-    catalogo = db.get(TareaCatalogo, locked.catalogo_id)
-    body = {"operation_id": str(operation_id), "replayed": False, "task": serialize(locked, catalogo)}
-    db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="applied", response_status=200, response_body=body))
-    db.commit()
-    return body, False
+        return body, False
 
 
 def delete_idempotent(
@@ -163,37 +206,39 @@ def delete_idempotent(
     path: str,
 ) -> tuple[dict, bool]:
     """Cancel a task under the same idempotency and optimistic-lock contract."""
-    digest = request_hash("DELETE", path, {"expected_version": expected_version})
-    existing = find_dedupe(db, actor_user_id, operation_id)
-    if existing is not None:
-        if existing.request_hash != digest:
-            body = {"error": {"code": "operation_payload_mismatch", "message": "La operación ya existe con otro payload", "operation_id": str(operation_id)}}
-            raise IdempotencyConflict("operation_payload_mismatch", body["error"]["message"], body)
-        if existing.response_status != 204:
-            error = existing.response_body.get("error", {})
-            raise IdempotencyConflict(str(error.get("code", "operation_rejected")), str(error.get("message", "Operación rechazada")), existing.response_body)
-        return existing.response_body, True
+    with operation_lock(actor_user_id, operation_id):
+        digest = request_hash("DELETE", path, {"expected_version": expected_version})
+        existing = find_dedupe(db, actor_user_id, operation_id)
+        if existing is not None:
+            if existing.request_hash != digest:
+                body = {"error": {"code": "operation_payload_mismatch", "message": "La operación ya existe con otro payload", "operation_id": str(operation_id)}}
+                raise IdempotencyConflict("operation_payload_mismatch", body["error"]["message"], body)
+            if existing.response_status != 204:
+                error = existing.response_body.get("error", {})
+                raise IdempotencyConflict(str(error.get("code", "operation_rejected")), str(error.get("message", "Operación rechazada")), existing.response_body)
+            db.commit()
+            return existing.response_body, True
 
-    locked = db.scalar(select(TareaEjecucion).where(TareaEjecucion.id == item.id).with_for_update())
-    if locked is None:
-        body = {"error": {"code": "not_found", "message": "Tarea no encontrada", "operation_id": str(operation_id)}}
-        raise IdempotencyConflict("not_found", body["error"]["message"], body)
-    if not isinstance(expected_version, int) or isinstance(expected_version, bool) or expected_version <= 0:
-        body = {"error": {"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo", "operation_id": str(operation_id)}}
-        raise IdempotencyConflict("invalid_expected_version", body["error"]["message"], body)
-    if locked.version != expected_version:
-        body = {"error": {"code": "stale_version", "message": "La tarea cambió mientras estaba pendiente", "operation_id": str(operation_id), "expected_version": expected_version, "resource": {"id": str(locked.id), "version": locked.version}}}
-        db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="rejected", response_status=409, response_body=body))
+        locked = db.scalar(select(TareaEjecucion).where(TareaEjecucion.id == item.id).with_for_update())
+        if locked is None:
+            body = {"error": {"code": "not_found", "message": "Tarea no encontrada", "operation_id": str(operation_id)}}
+            raise IdempotencyConflict("not_found", body["error"]["message"], body)
+        if not isinstance(expected_version, int) or isinstance(expected_version, bool) or expected_version <= 0:
+            body = {"error": {"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo", "operation_id": str(operation_id)}}
+            raise IdempotencyConflict("invalid_expected_version", body["error"]["message"], body)
+        if locked.version != expected_version:
+            body = {"error": {"code": "stale_version", "message": "La tarea cambió mientras estaba pendiente", "operation_id": str(operation_id), "expected_version": expected_version, "resource": {"id": str(locked.id), "version": locked.version}}}
+            db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="rejected", response_status=409, response_body=body))
+            db.commit()
+            raise IdempotencyConflict("stale_version", body["error"]["message"], body)
+
+        locked.estado = EstadoTarea.CANCELADA
+        locked.version += 1
+        locked.updated_at = datetime.now(tz=timezone.utc)
+        body = {"operation_id": str(operation_id), "replayed": False}
+        db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="applied", response_status=204, response_body=body))
         db.commit()
-        raise IdempotencyConflict("stale_version", body["error"]["message"], body)
-
-    locked.estado = EstadoTarea.CANCELADA
-    locked.version += 1
-    locked.updated_at = datetime.now(tz=timezone.utc)
-    body = {"operation_id": str(operation_id), "replayed": False}
-    db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="applied", response_status=204, response_body=body))
-    db.commit()
-    return body, False
+        return body, False
 
 
 def _apply_update(item: TareaEjecucion, data: dict) -> None:
