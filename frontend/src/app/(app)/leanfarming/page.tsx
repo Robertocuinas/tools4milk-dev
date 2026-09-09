@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 import { useToast } from "@/components/ui/toast";
+import { SyntheticMarker } from "@/components/ui/synthetic-marker";
 import { WeeklyPlanView } from "@/components/leanfarming/WeeklyPlanView";
 import { ZonePlanView } from "@/components/leanfarming/ZonePlanView";
 import { WorkloadView } from "@/components/leanfarming/WorkloadView";
@@ -438,6 +439,7 @@ export default function LeanFarmingPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <SyntheticMarker />
             <div className="flex overflow-hidden rounded-[10px] border border-app-border bg-white">
               {[
                 { key: "zonas", label: "Por zona", Icon: LayoutGrid },

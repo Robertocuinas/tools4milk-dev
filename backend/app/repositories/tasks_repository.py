@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.enums import EstadoTarea
+from app.enums import EstadoTarea, ESTADOS_TAREA_CANONICOS, TRANSICIONES_TAREA
 from app.models.tools4milk import TareaEjecucion, TareaCatalogo
 
 
@@ -56,6 +56,11 @@ def create(db: Session, catalogo_id: uuid.UUID, data: dict) -> tuple[TareaEjecuc
         estado=_map_estado(data.get("estado", "pendiente")),
         ts_planificada=ts_planificada,
         ts_inicio=_parse_dt(data.get("fecha_ejecucion")),
+        ts_fin=_parse_dt(data.get("fecha_fin")),
+        duracion_estimada_min=_positive_int(data.get("duracion_estimada_min")),
+        duracion_real_min=_non_negative_int(data.get("duracion_real_min")),
+        prioridad=_priority(data.get("prioridad", 3)),
+        turno_id=_to_uuid(data.get("turno_id")),
         notas=data.get("observaciones") or data.get("notas"),
         creado_en=datetime.now(tz=timezone.utc),
     )
@@ -68,11 +73,29 @@ def create(db: Session, catalogo_id: uuid.UUID, data: dict) -> tuple[TareaEjecuc
 
 def update(db: Session, item: TareaEjecucion, data: dict) -> tuple[TareaEjecucion, TareaCatalogo | None]:
     if "estado" in data:
-        item.estado = _map_estado(data["estado"])
+        next_state = _map_estado(data["estado"])
+        current_state = _canonical_state(item.estado)
+        if next_state not in ESTADOS_TAREA_CANONICOS:
+            raise ValueError("estado no pertenece al contrato canónico")
+        if next_state != current_state and next_state not in TRANSICIONES_TAREA[current_state]:
+            current_value = current_state.value if isinstance(current_state, EstadoTarea) else str(current_state)
+            next_value = next_state.value if isinstance(next_state, EstadoTarea) else str(next_state)
+            raise ValueError(f"transición inválida: {current_value} -> {next_value}")
+        item.estado = next_state
     if "fecha_ejecucion" in data:
         item.ts_inicio = _parse_dt(data["fecha_ejecucion"])
     if "fecha_programada" in data:
         item.ts_planificada = _parse_dt(data["fecha_programada"]) or item.ts_planificada
+    if "fecha_fin" in data:
+        item.ts_fin = _parse_dt(data["fecha_fin"])
+    if "duracion_estimada_min" in data:
+        item.duracion_estimada_min = _positive_int(data["duracion_estimada_min"])
+    if "duracion_real_min" in data:
+        item.duracion_real_min = _non_negative_int(data["duracion_real_min"])
+    if "prioridad" in data:
+        item.prioridad = _priority(data["prioridad"])
+    if "turno_id" in data:
+        item.turno_id = _to_uuid(data["turno_id"])
     if "observaciones" in data or "notas" in data:
         item.notas = data.get("observaciones") or data.get("notas")
     if "empleado_id" in data or "ejecutado_por" in data:
@@ -94,10 +117,13 @@ def _map_estado(estado: str | EstadoTarea) -> EstadoTarea:
         "cancelada": EstadoTarea.CANCELADA,
         "pendiente": EstadoTarea.PENDIENTE,
         "en_curso": EstadoTarea.EN_CURSO,
+        "verificacion": EstadoTarea.VERIFICACION,
         "completada": EstadoTarea.COMPLETADA,
-        "vencida": EstadoTarea.VENCIDA,
+        "vencida": EstadoTarea.PENDIENTE,
     }
-    return mapping.get(estado, EstadoTarea.PENDIENTE)
+    if estado not in mapping:
+        raise ValueError(f"estado inválido: {estado}")
+    return mapping[estado]
 
 
 def _map_estado_to_frontend(estado: str | EstadoTarea) -> str:
@@ -106,11 +132,45 @@ def _map_estado_to_frontend(estado: str | EstadoTarea) -> str:
     mapping = {
         "pendiente": "programada",
         "en_curso": "en_curso",
+        "verificacion": "verificacion",
         "completada": "ejecutada",
         "vencida": "retrasada",
         "cancelada": "cancelada",
     }
     return mapping.get(estado_str, estado_str)
+
+
+def _canonical_state(estado: EstadoTarea | str) -> EstadoTarea:
+    if not isinstance(estado, EstadoTarea):
+        estado = EstadoTarea(str(estado))
+    if estado in {EstadoTarea.VENCIDA, EstadoTarea.CANCELADA}:
+        return EstadoTarea.PENDIENTE
+    return estado
+
+
+def _positive_int(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError("duración estimada debe ser positiva")
+    return parsed
+
+
+def _non_negative_int(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError("duración real no puede ser negativa")
+    return parsed
+
+
+def _priority(value: object) -> int:
+    parsed = int(value)
+    if parsed < 1 or parsed > 5:
+        raise ValueError("prioridad debe estar entre 1 y 5")
+    return parsed
 
 
 def _parse_dt(value: str | datetime | None) -> datetime | None:

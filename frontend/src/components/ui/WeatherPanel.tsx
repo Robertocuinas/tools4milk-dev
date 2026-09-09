@@ -34,7 +34,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
 
   const forecastQ = useQuery({
     queryKey: ["weather-forecast"],
-    queryFn: api.weatherForecast,
+    queryFn: api.weatherReadings,
     staleTime: TV_STALE.VERY_SLOW,
     refetchInterval: TV_REFETCH.VERY_SLOW,
     enabled: !compact,
@@ -42,6 +42,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
 
   const w = currentQ.data;
   const forecast = forecastQ.data?.dias ?? [];
+  const synthetic = forecastQ.data?.synthetic ?? currentQ.data?.synthetic ?? true;
   const location = currentQ.data?.ubicacion ?? forecastQ.data?.ubicacion ?? "Villalba, Lugo";
 
   // Theme classes
@@ -145,7 +146,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
       {forecast.length > 0 && (
         <div className={`border-t ${dark ? "border-tv-border" : "border-app-border"} p-4`}>
           <p className={`mb-3 text-[11px] font-extrabold uppercase tracking-[0.14em] ${title}`}>
-            Previsión disponible · {forecast.length} lecturas
+            Histórico meteorológico · {forecast.length} lecturas
           </p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {forecast.slice(0, 7).map((day: WeatherForecastDay, i: number) => (
@@ -178,7 +179,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
             ))}
           </div>
           <p className={`mt-2 text-[10px] ${sub}`}>
-            Fuente: {forecast[0]?.fuente ?? "AEMET"} · Datos de sensores locales
+            Fuente: {synthetic ? "generated · demo sintética" : "aemet_real"} · No es previsión futura
           </p>
         </div>
       )}
@@ -186,7 +187,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
       {!compact && forecast.length === 0 && !forecastQ.isLoading && (
         <div className={`border-t ${dark ? "border-tv-border" : "border-app-border"} px-4 py-3`}>
           <p className={`text-xs ${sub}`}>
-            Previsión no disponible. Sincroniza datos AEMET desde Integración.
+            Histórico no disponible. Sincroniza datos desde Integración.
           </p>
         </div>
       )}

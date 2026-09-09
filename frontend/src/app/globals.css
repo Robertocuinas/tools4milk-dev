@@ -29,10 +29,15 @@
 
   /* ── Semantic state colors ── */
   --color-state-critica:  #dc2626;
-  --color-state-atencion: #d97706;
+  /* Dark enough to remain readable over the tinted warning surface. */
+  --color-state-atencion: #a65300;
   --color-state-ok:       #16a34a;
   --color-state-info:     #2563eb;
   --color-state-neutral:  #64748b;
+
+  /* Shared layout and interaction tokens */
+  --spacing-control: 2.75rem;
+  --focus-ring: 0 0 0 3px rgba(27, 94, 59, 0.28);
 
   /* ── Shadows ── */
   --shadow-brand:    0 18px 60px rgba(27, 94, 59, 0.28);
@@ -86,12 +91,22 @@ button {
 }
 
 button, a, input, textarea, select {
-  outline-color: transparent;
+  outline-color: var(--brand);
 }
 
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 [aria-live] {

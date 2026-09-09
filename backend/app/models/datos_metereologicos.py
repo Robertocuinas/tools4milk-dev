@@ -22,7 +22,7 @@ class DatosMetereologicos(Base):
     ubicacion: Mapped[str] = mapped_column(String(160), default="Villalba, Lugo")
     latitud: Mapped[float] = mapped_column(Float, nullable=True)
     longitud: Mapped[float] = mapped_column(Float, nullable=True)
-    fuente: Mapped[str] = mapped_column(String(80), nullable=True)
+    fuente: Mapped[str] = mapped_column(String(80), nullable=False, default="generated")
 
     @property
     def es_lluvia(self) -> bool:

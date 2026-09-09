@@ -461,6 +461,7 @@ export const api = {
   // ── Weather (extended) ────────────────────────────────────────────────────
 
   weatherForecast() {
+    /** @deprecated Use weatherReadings; this route is historical, not a forecast. */
     return request<WeatherForecast>("/weather/forecast");
   },
 
@@ -490,8 +491,39 @@ export const api = {
 
   // ── Weather readings (labelled version of sensor data) ────────────────────
 
-  weatherReadings(params?: QueryParams) {
-    return request<{ ubicacion: string; total: number; order: string; lecturas: unknown[] }>("/weather/readings", {}, params);
+  weatherReadings() {
+    return request<{
+      ubicacion: string;
+      source: "generated" | "aemet_real";
+      mode: "synthetic" | "real";
+      synthetic: boolean;
+      lecturas: Array<{
+        fecha: string | null;
+        temperatura_c: number | null;
+        humedad_relativa: number | null;
+        precipitacion_mm: number | null;
+        prob_precipitacion_pct: number | null;
+        viento_km_h: number | null;
+        fuente: string;
+      }>;
+    }>("/weather/readings?limit=7&order=asc").then((data) => ({
+      ubicacion: data.ubicacion,
+      source: data.source,
+      mode: data.mode,
+      synthetic: data.synthetic,
+      dias: data.lecturas.map((reading) => ({
+        fecha: reading.fecha,
+        temperatura_media: reading.temperatura_c,
+        temperatura_maxima: null,
+        temperatura_minima: null,
+        humedad: reading.humedad_relativa,
+        precipitacion: reading.precipitacion_mm,
+        prob_precipitacion_pct: reading.prob_precipitacion_pct,
+        viento: reading.viento_km_h,
+        descripcion: null,
+        fuente: reading.fuente,
+      })),
+    }));
   },
 };
 

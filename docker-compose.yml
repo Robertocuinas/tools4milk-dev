@@ -4,10 +4,10 @@ services:
     container_name: tfm_postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: tools4milk
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # init.sql solo se ejecuta la primera vez que se crea el volumen.
@@ -23,15 +23,15 @@ services:
     build: ./backend
     container_name: tfm-backend
     environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/tools4milk
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tools4milk}
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      SECRET_KEY: ${SECRET_KEY:-tools4milk-dev-secret-change-me}
+      SECRET_KEY: ${SECRET_KEY:-tools4milk-demo-secret-change-me-please-32chars}
       INITIAL_DEMO_PASSWORD: ${INITIAL_DEMO_PASSWORD:-testpass123}
       AEMET_API_KEY: ${AEMET_API_KEY:-}
-      CORS_ORIGINS: '["http://localhost","http://localhost:80","http://127.0.0.1","http://localhost:3000","http://127.0.0.1:3000"]'
+      CORS_ORIGINS: "${CORS_ORIGINS:-[\"http://localhost\",\"http://localhost:80\",\"http://127.0.0.1\",\"http://localhost:3000\",\"http://127.0.0.1:3000\"]}"
       PYTHONUNBUFFERED: 1
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +46,24 @@ services:
       retries: 6
       start_period: 30s
 
+  scheduler:
+    build: ./backend
+    container_name: tfm-synthetic-scheduler
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/tools4milk}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: python scripts/run_synthetic_scheduler.py --interval-seconds ${SYNTHETIC_INTERVAL_SECONDS:-3600} --profile ${SYNTHETIC_PROFILE:-small} --scenario ${SYNTHETIC_SCENARIO:-normal}
+    # El scheduler es un proceso worker y no expone HTTP; no heredar el
+    # HEALTHCHECK del Dockerfile del backend, que lo marcaría unhealthy.
+    healthcheck:
+      disable: true
+
   frontend:
     build:
       context: ./frontend
@@ -55,7 +73,7 @@ services:
     environment:
       PORT: 3000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
     healthcheck:
@@ -72,7 +90,7 @@ services:
     image: nginx:alpine
     container_name: tfm-nginx
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:

@@ -73,7 +73,9 @@ export type AlertsResponse = {
   };
 };
 
-export type TaskStatus = "programada" | "ejecutada" | "retrasada" | "cancelada" | "pausada";
+/** Estado canónico; los valores legacy solo cubren respuestas Release 0. */
+export type CanonicalTaskStatus = "pendiente" | "en_curso" | "verificacion" | "completada";
+export type TaskStatus = CanonicalTaskStatus | "programada" | "ejecutada" | "retrasada" | "cancelada" | "pausada";
 
 export type TareaCatalogo = {
   id: string;
@@ -92,8 +94,14 @@ export type Task = {
   fecha_programada: string;
   fecha_ejecucion?: string | null;
   estado: TaskStatus;
+  estado_canonico?: CanonicalTaskStatus;
   ejecutado_por?: string | null;
   tiempo_ejecucion_minutos?: string | null;
+  duracion_estimada_min?: number | null;
+  duracion_real_min?: number | null;
+  prioridad?: number;
+  turno_id?: string | null;
+  fecha_fin?: string | null;
   resultado?: string | null;
   observaciones?: string | null;
   problemas_encontrados?: string | null;
@@ -340,7 +348,6 @@ export type ProductionPrediction = {
   produccion_minima_predicha?: number | null;
   produccion_maxima_predicha?: number | null;
   dias_prediccion?: number | null;
-  confidence: number;
   series_diaria?: number[] | null;
 };
 
@@ -349,24 +356,31 @@ export type CompositionPrediction = {
   proteina: { prediccion: number; tendencia?: string };
   lactosa?: { prediccion: number; tendencia?: string } | null;
   anomalia_detectada?: boolean;
-  confidence: number;
 };
 
 export type HealthRiskPrediction = {
   riesgo_promedio: RiskLevel;
   riesgos_especificos?: Record<string, { probabilidad: number; nivel: RiskLevel }>;
   factores_riesgo?: string[];
-  confidence: number;
   dias_prediccion?: number | null;
+};
+
+export type Provenance = {
+  source: "generated" | "aemet_real";
+  mode: "synthetic" | "real";
+  synthetic: boolean;
 };
 
 export type AnimalPrediction = {
   animal_id: string;
   timestamp: string;
+  provenance: Provenance;
+  method: "heuristic_arithmetic";
+  validated: false;
+  limitations: string[];
   produccion?: ProductionPrediction | null;
   composicion?: CompositionPrediction | null;
   riesgo_sanitario?: HealthRiskPrediction | null;
-  confianza_integrada?: number;
   _mock?: boolean;
 };
 
@@ -419,6 +433,9 @@ export type Machinery = {
 };
 
 export type WeatherData = {
+  source?: "generated" | "aemet_real";
+  mode?: "synthetic" | "real";
+  synthetic?: boolean;
   temperatura_actual?: number | null;
   temperatura?: number | null;
   humedad?: number | null;
@@ -446,6 +463,11 @@ export type WeatherForecastDay = {
 export type WeatherForecast = {
   ubicacion: string;
   dias: WeatherForecastDay[];
+  source?: "generated" | "aemet_real";
+  mode?: "synthetic" | "real";
+  synthetic?: boolean;
+  deprecated?: boolean;
+  is_forecast?: boolean;
 };
 
 export type ApiErrorPayload = {

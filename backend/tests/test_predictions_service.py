@@ -73,7 +73,8 @@ class TestComputePrediction:
 
         assert "produccion" in result
         prod = result["produccion"]
-        assert 0.4 <= prod["confidence"] < 0.6
+        assert result["method"] == "heuristic_arithmetic"
+        assert result["validated"] is False
         assert prod["dias_prediccion"] == 7
         # Sin producción base, la serie es de ceros.
         assert all(value == 0 for value in prod["series_diaria"])
@@ -90,10 +91,10 @@ class TestComputePrediction:
 
         # 9000 / 305 ≈ 29.5 L/día base.
         assert 28.0 <= prod["produccion_promedio_predicha"] <= 31.0
-        assert prod["confidence"] >= 0.8
+        assert result["limitations"]
         # Riesgo bajo sin alertas ni tratamientos.
         assert result["riesgo_sanitario"]["riesgo_promedio"] == "bajo"
-        assert result["confianza_integrada"] >= 0.8
+
         # Composición es placeholder -> 0.
         assert result["composicion"]["grasa"]["prediccion"] == 0
         assert result["composicion"]["proteina"]["prediccion"] == 0

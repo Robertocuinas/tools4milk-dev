@@ -125,10 +125,15 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo"
         )
 
+    # Construir el DTO antes de emitir el refresh. ``create_refresh_token``
+    # confirma la transacción y SQLAlchemy puede expirar la instancia; si
+    # otro proceso elimina el usuario entre el commit y la serialización,
+    # acceder después a ``user`` puede producir ObjectDeletedError.
+    response_user = user_payload(user)
     token_response = _build_full_token_response(db, user, _client_ip(request))
     set_auth_cookie(response, token_response.access_token)
     set_refresh_cookie(response, token_response.refresh_token or "")
-    return AuthResponse(user=user_payload(user), token=token_response)
+    return AuthResponse(user=response_user, token=token_response)
 
 
 @router.get("/me", response_model=UserResponse)

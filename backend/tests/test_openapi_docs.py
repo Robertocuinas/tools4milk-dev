@@ -22,6 +22,8 @@ def test_openapi_schema_contains_developer_metadata():
     assert "servers" in schema
     assert "x-tagGroups" in schema
     assert "bearerAuth" in schema["components"]["securitySchemes"]
+    assert schema["components"]["schemas"]["Provenance"]["properties"]["source"]["enum"] == ["generated", "aemet_real"]
+    assert "heuristic_arithmetic" in schema["components"]["schemas"]["HeuristicPredictionMetadata"]["properties"]["method"]["enum"]
 
 
 def test_openapi_has_examples_for_core_frontend_flows():

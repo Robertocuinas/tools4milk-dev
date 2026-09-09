@@ -27,17 +27,34 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 def split_sql(sql: str) -> list[str]:
     statements: list[str] = []
     current: list[str] = []
+    dollar_tag: str | None = None
     for line in sql.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("--"):
             continue
-        current.append(line)
-        if stripped.endswith(";"):
-            statement = "\n".join(current).strip().rstrip(";")
-            if statement:
-                statements.append(statement)
-            current = []
-    tail = "\n".join(current).strip()
+        position = 0
+        while position < len(line):
+            if line[position] == "$":
+                tag_match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", line[position:])
+                if tag_match:
+                    tag = tag_match.group(0)
+                    current.append(tag)
+                    position += len(tag)
+                    if dollar_tag is None:
+                        dollar_tag = tag
+                    elif dollar_tag == tag:
+                        dollar_tag = None
+                    continue
+            character = line[position]
+            current.append(character)
+            if character == ";" and dollar_tag is None:
+                statement = "".join(current).strip().rstrip(";")
+                if statement:
+                    statements.append(statement)
+                current = []
+            position += 1
+        current.append("\n")
+    tail = "".join(current).strip()
     if tail:
         statements.append(tail)
     return statements

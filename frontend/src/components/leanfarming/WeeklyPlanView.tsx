@@ -9,8 +9,8 @@ const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "
 const SHIFT_TYPES = {
   manana: "Mañana",
   tarde: "Tarde",
-  noche: "Noche/Guardia",
 };
+type ShiftFilter = keyof typeof SHIFT_TYPES | "all";
 
 interface WeeklyPlanViewProps {
   tasks: Task[];
@@ -35,6 +35,7 @@ export function WeeklyPlanView({
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string | "all">("all");
   const [selectedStateFilter, setSelectedStateFilter] = useState<string | "all">("all");
+  const [selectedShift, setSelectedShift] = useState<ShiftFilter>("all");
 
   // Build tasks grid by day and shift
   const tasksGrid = useMemo(() => {
@@ -60,19 +61,20 @@ export function WeeklyPlanView({
       const hour = date.getHours();
       let shiftType = "tarde";
       if (hour < 14) shiftType = "manana";
-      else if (hour >= 22 || hour < 6) shiftType = "noche";
+      if (selectedShift !== "all" && shiftType !== selectedShift) return;
 
       grid[dayIndex][shiftType].push(task);
     });
 
     return grid;
-  }, [tasks, selectedZoneFilter, selectedStateFilter]);
+  }, [tasks, selectedZoneFilter, selectedStateFilter, selectedShift]);
 
   const unassignedTasks = tasks.filter(
     (t) =>
       !t.empleado_id &&
       (selectedZoneFilter === "all" || t.zona_id === selectedZoneFilter) &&
-      (selectedStateFilter === "all" || t.estado === selectedStateFilter)
+      (selectedStateFilter === "all" || t.estado === selectedStateFilter) &&
+      (selectedShift === "all" || (t.fecha_programada ? (new Date(t.fecha_programada).getHours() < 14 ? "manana" : "tarde") === selectedShift : true))
   );
 
   return (
@@ -111,6 +113,22 @@ export function WeeklyPlanView({
             <option value="retrasada">Retrasada</option>
             <option value="pausada">En curso</option>
             <option value="ejecutada">Finalizada</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="shift-filter" className="text-xs font-semibold uppercase text-app-dim mb-2 block">
+            Turno
+          </label>
+          <select
+            id="shift-filter"
+            value={selectedShift}
+            onChange={(e) => setSelectedShift(e.target.value as ShiftFilter)}
+            className="rounded-[10px] border border-app-border px-3 py-2 text-sm bg-white"
+          >
+            <option value="all">Todos los turnos</option>
+            <option value="manana">Mañana</option>
+            <option value="tarde">Tarde</option>
           </select>
         </div>
       </div>

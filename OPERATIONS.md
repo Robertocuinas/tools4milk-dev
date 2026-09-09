@@ -22,7 +22,7 @@ y se centra en **cómo correrla en otro servidor sin sorpresas**.
 git clone https://github.com/Robertocuinas/tools4milk-dev.git
 cd tools4milk-dev
 
-# 2. Configurar el entorno (opcional pero recomendado)
+# 2. Configurar el entorno demo (explícito y solo local)
 cat > .env <<'EOF'
 ENVIRONMENT=development
 SECRET_KEY=$(openssl rand -base64 48)   # ⚠ cambia esto en producción
@@ -32,7 +32,7 @@ EOF
 
 # 3. Levantar el stack limpio
 #    - Postgres espera a estar healthy
-#    - Backend aplica migraciones (0000..0009) y siembra usuarios demo
+#    - Backend aplica migraciones (0000..0009) y, solo con configuración demo, siembra usuarios
 #    - Frontend espera al backend
 #    - Nginx enruta solo cuando frontend Y backend están healthy
 docker compose up -d --build
@@ -45,6 +45,34 @@ docker compose logs -f backend | head -30
 # Debe terminar con "Application startup complete" y un "Uvicorn running on
 # http://0.0.0.0:8000".
 ```
+
+### Scheduler sintético y recurrencias
+
+El servicio `scheduler` se inicia junto con Compose y materializa recurrencias
+cada hora por defecto. No requiere AEMET, Redis ni Celery: las claves de
+recurrencia y ocurrencia se derivan de versión, seed, escenario y fecha.
+Repetir la ejecución solo incrementa `omitidos`; nunca duplica tareas ni
+provenance.
+
+```bash
+# Ejecutar una materialización manual dentro del backend
+docker compose exec backend python scripts/run_synthetic_scheduler.py --once --profile small --horizon-days 7
+
+# Pausar/reanudar (añade el token/cookie admin habitual)
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/scheduler/pause
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/scheduler/resume
+
+# Consultar estado: última ejecución, duración, creados, omitidos y errores
+curl http://localhost:8000/api/v1/admin/synthetic/scheduler
+
+# Reset seguro: solo filas con provenance synthetic/generated
+curl -X POST http://localhost:8000/api/v1/admin/synthetic/reset
+docker compose exec backend python scripts/run_synthetic_scheduler.py --once --seed 20260602
+```
+
+Variables opcionales: `SYNTHETIC_INTERVAL_SECONDS` (>=1),
+`SYNTHETIC_PROFILE` (`small`, `demo`, `load`) y `SYNTHETIC_SCENARIO`.
+Los endpoints de operación sintética están deshabilitados en producción.
 
 ### URLs por defecto
 
@@ -64,11 +92,39 @@ docker compose up -d --build
 
 El `-v` borra el volumen `postgres_data`. La próxima vez que arranque,
 `docker-entrypoint-initdb.d/init.sql` creará el schema base y el backend
-aplicará las migraciones numeradas y sembrará los 5 usuarios demo.
+aplicará las migraciones numeradas. Los usuarios demo solo se crean si
+`ENVIRONMENT=development` (o `demo`/`test`) y `INITIAL_DEMO_PASSWORD` no está vacío.
+
+### Auditoría de dependencias frontend
+
+Las versiones de Next.js y PostCSS se fijan deliberadamente en `frontend/package.json`
+y `frontend/package-lock.json`; no se debe ejecutar `npm audit fix --force`. El workflow
+de CI ejecuta `npm audit --omit=dev --audit-level=high`, que bloquea vulnerabilidades
+`high` o `critical` alcanzables en producción, y publica además el informe completo
+como artefacto para revisar el tooling.
+
+La remediación P0 actualiza Next.js a `16.3.4` (corrige los advisories de Next.js,
+incluidos `GHSA-p293-qw3h-jr36` y `GHSA-2xp9-vwfh-vxw4`) y PostCSS a `8.5.28`
+(corrige `GHSA-fxqj-rqcc-2cmp` y `GHSA-r28c-9q8g-f849`). El audit de producción
+queda sin findings `high`/`critical`; permanece un finding moderado de
+`baseline-browser-mapping` (`GHSA-w5vr-8v7q-w6rv`) transitivo de Next.js y
+Browserslist, sin impacto de ejecución de la aplicación.
+
+El audit completo puede seguir mostrando findings de desarrollo: `brace-expansion`
+(`GHSA-3jxr-9vmj-r5cp`, `GHSA-mh99-v99m-4gvg`, `GHSA-rgw5-rvv9-x895`) llega por
+`minimatch` usado por `@eslint/eslintrc`/TypeScript ESLint; `browserslist`
+(`GHSA-c83g-rgw3-j3cx`, `GHSA-73wf-gq98-2v4g`) llega por Autoprefixer/ESLint;
+`js-yaml` (`GHSA-h67p-54hq-rp68`, `GHSA-52cp-r559-cp3m`, `GHSA-5p4m-2wfm-xmqj`,
+`GHSA-2883-xcg3-v3hh`) llega por `@eslint/eslintrc`; y `@babel/core`
+(`GHSA-4x5r-pxfx-6jf8`) llega por `eslint-plugin-react-hooks`. Son herramientas
+ejecutadas durante lint/build, no se empaquetan en la imagen standalone ni se
+exponen al runtime. Se registran y se revisan con cada actualización de tooling;
+el gate de producción no los oculta.
 
 ### Poblar con datos de demo
 
-El backend crea 5 usuarios en el primer arranque (ver §5) pero las tablas
+Con `ENVIRONMENT=development` y `INITIAL_DEMO_PASSWORD` no vacío, el backend
+crea 5 usuarios demo en el primer arranque (ver §5); las tablas
 de dominio (animales, lactaciones, alertas…) arrancan vacías. Para
 poblar la BD con datos de ejemplo, ejecuta el seed manual:
 
@@ -121,7 +177,7 @@ Las mínimas para producción:
 | `ENVIRONMENT` | `production` | Activa validaciones duras en startup + HSTS + cookie `Secure`. |
 | `CORS_ORIGINS` | `https://granja.example.com` | Lista separada por comas. **Nunca** dejar `*` en prod. |
 | `AEMET_API_KEY` | (opcional) | API key de AEMET OpenData. Si falta, el módulo `weather` usa datos sintéticos. |
-| `INITIAL_DEMO_PASSWORD` | (vacío en prod) | Contraseña inicial de los 5 usuarios demo. **Vacía en prod** para que el seed no se aplique. |
+| `INITIAL_DEMO_PASSWORD` | (vacío en prod) | Contraseña inicial de los 5 usuarios demo. Solo se procesa en `development`, `demo` o `test`; **vacía en prod** y producción rechaza cualquier valor. |
 | `LOGIN_RATE_LIMIT_MAX` | `5` | Intentos por ventana (default 5). |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | Ventana de rate limit (default 60s). |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | TTL del refresh token. |
@@ -173,9 +229,9 @@ el logout forzado es aceptable para esta app interna.
 
 ## 5. Usuarios demo
 
-`backend/app/main.py::seed_demo_user` crea 5 usuarios la primera vez
-que arranca el backend, **solo si** `INITIAL_DEMO_PASSWORD` está
-definida:
+`backend/app/main.py::seed_demo_user` crea 5 usuarios al arrancar solo
+en `development`, `demo` o `test`, y únicamente cuando
+`INITIAL_DEMO_PASSWORD` está definida y no vacía:
 
 | Username | Rol | Uso |
 |---|---|---|
@@ -187,9 +243,10 @@ definida:
 
 Todos con `INITIAL_DEMO_PASSWORD` y `debe_cambiar_contrasena=False`.
 
-**En producción**: deja `INITIAL_DEMO_PASSWORD=""` para que el seed
-no se aplique. Crea los usuarios reales a través de
-`POST /api/v1/auth/users` o directamente con `psql` + un hash bcrypt.
+**En producción**: `ENVIRONMENT=production` rechaza el arranque si
+`INITIAL_DEMO_PASSWORD` no está vacía y nunca ejecuta el seed. Crea los
+usuarios reales mediante un procedimiento administrativo fuera de este
+seed; no reutilices las credenciales demo.
 
 ---
 
@@ -246,9 +303,12 @@ rotar `SECRET_KEY` tras un restore para forzar re-login.
   3. Si frontend y backend están en dominios distintos, ambos deben
      tener HTTPS (la cookie lleva `SameSite=Lax` y `Secure` en prod).
 
-**Las predicciones siempre devuelven confianza baja.**
+**Las predicciones son heurísticas experimentales, no ML.**
+- Las respuestas incluyen `method=heuristic_arithmetic`, `validated=false` y limitaciones explícitas.
+- No se muestra una confianza calibrada ni deben interpretarse como recomendación clínica o productiva.
+- La evaluación sintética no equivale a validación en campo.
 - El servicio de predicciones combina historial del animal + meteo.
-  Sin datos de lactación activa, la confianza baja al mínimo (ver
+  Sin datos de lactación activa, la estimación se degrada (ver
   el banner de `/predictions`). No es un bug, es el modelo.
 
 ---

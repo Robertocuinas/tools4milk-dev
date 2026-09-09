@@ -395,6 +395,10 @@ class TareaEjecucion(Base):
     ts_planificada: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     ts_inicio: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ts_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duracion_estimada_min: Mapped[int | None] = mapped_column(Integer)
+    duracion_real_min: Mapped[int | None] = mapped_column(Integer)
+    prioridad: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
+    turno_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("turnos.id"))
     notas: Mapped[str | None] = mapped_column(Text)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -430,6 +434,59 @@ class AsignacionTurno(Base):
     empleado_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("empleados.id"), nullable=False)
     zona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zonas.id"))
     rol: Mapped[str | None] = mapped_column(String(80))
+
+
+class SyntheticProvenance(Base):
+    """Provenance inmutable de registros materializados desde el generador."""
+
+    __tablename__ = "synthetic_provenance"
+    __table_args__ = (UniqueConstraint("entity_type", "entity_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(80), nullable=False)
+    generator_version: Mapped[str] = mapped_column(String(30), nullable=False)
+    scenario_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    simulation_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict] = mapped_column(POSTGRES_JSON, nullable=False, default=dict)
+
+
+class SchedulerState(Base):
+    """Estado singleton del scheduler de la demo sintética."""
+
+    __tablename__ = "synthetic_scheduler_state"
+
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_duration_ms: Mapped[int | None] = mapped_column(Integer)
+    last_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SchedulerRun(Base):
+    """Métrica histórica compacta de cada ejecución del scheduler."""
+
+    __tablename__ = "synthetic_scheduler_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    profile: Mapped[str] = mapped_column(String(20), nullable=False)
+    scenario: Mapped[str] = mapped_column(String(80), nullable=False)
+    seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_class: Mapped[str | None] = mapped_column(String(80))
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +552,7 @@ class LecturaMeteo(Base):
     viento_km_h: Mapped[Decimal | None] = mapped_column(Numeric(5, 1))
     direccion_viento: Mapped[int | None] = mapped_column(SmallInteger)
     radiacion_wm2: Mapped[Decimal | None] = mapped_column(Numeric(6, 1))
+    fuente: Mapped[str] = mapped_column(String(40), nullable=False, default="generated")
     # indice_thermo_humedad es GENERATED ALWAYS AS STORED en PostgreSQL — solo lectura
 
 

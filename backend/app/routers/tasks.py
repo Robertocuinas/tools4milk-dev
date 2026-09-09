@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.tools4milk import TareaCatalogo
 from app.repositories import tasks_repository
-from app.routers.deps import DbSession, TaskManager
+from app.routers.deps import AdminOnly, DbSession, TaskManager
 from app.security import get_current_user
 from app.services import tasks_service
 
@@ -70,7 +70,7 @@ def task_catalog(
 
 
 @router.post("/tareas-catalogo", status_code=201)
-def create_task_catalog(payload: dict[str, Any], db: DbSession) -> dict[str, Any]:
+def create_task_catalog(payload: dict[str, Any], db: DbSession, _user: AdminOnly) -> dict[str, Any]:
     """Create a new task catalog item."""
     item = TareaCatalogo(
         id=uuid.uuid4(),
@@ -96,7 +96,7 @@ def create_task_catalog(payload: dict[str, Any], db: DbSession) -> dict[str, Any
 
 
 @router.put("/tareas-catalogo/{catalog_id}")
-def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession) -> dict[str, Any]:
+def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession, _user: AdminOnly) -> dict[str, Any]:
     """Update a task catalog item."""
     try:
         uid = uuid.UUID(catalog_id)
@@ -134,7 +134,7 @@ def update_task_catalog(catalog_id: str, payload: dict[str, Any], db: DbSession)
 
 
 @router.delete("/tareas-catalogo/{catalog_id}", status_code=204)
-def delete_task_catalog(catalog_id: str, db: DbSession) -> None:
+def delete_task_catalog(catalog_id: str, db: DbSession, _user: AdminOnly) -> None:
     """Delete or deactivate a task catalog item."""
     try:
         uid = uuid.UUID(catalog_id)
@@ -182,7 +182,10 @@ def tasks(
     estado: str | None = None,
     zona_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    rows = tasks_repository.get_all(db, skip=skip, limit=limit, estado=estado, zona_id=zona_id)
+    try:
+        rows = tasks_repository.get_all(db, skip=skip, limit=limit, estado=estado, zona_id=zona_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return [tasks_service.serialize(ejecucion, catalogo) for ejecucion, catalogo in rows]
 
 
@@ -191,7 +194,11 @@ def create_task(payload: dict[str, Any], db: DbSession, _user: TaskManager) -> d
     catalogo_id = _resolve_catalogo_id(db, payload)
     if catalogo_id is None:
         raise HTTPException(status_code=400, detail="No hay tareas en el catalogo disponibles")
-    ejecucion, catalogo = tasks_repository.create(db, catalogo_id, payload)
+    try:
+        ejecucion, catalogo = tasks_repository.create(db, catalogo_id, payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return tasks_service.serialize(ejecucion, catalogo)
 
 
@@ -208,7 +215,11 @@ def update_task(task_id: str, payload: dict[str, Any], db: DbSession, _user: Tas
     row = tasks_repository.get_by_id(db, task_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
-    ejecucion, catalogo = tasks_repository.update(db, row[0], payload)
+    try:
+        ejecucion, catalogo = tasks_repository.update(db, row[0], payload)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return tasks_service.serialize(ejecucion, catalogo)
 
 

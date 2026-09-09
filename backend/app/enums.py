@@ -9,9 +9,27 @@ class EstadoTarea(str, Enum):
     """Estados de tareas (tareas_ejecuciones.estado)."""
     PENDIENTE = "pendiente"
     EN_CURSO = "en_curso"
+    VERIFICACION = "verificacion"
     COMPLETADA = "completada"
+    # Compatibilidad de lectura con bases Release 0. Las nuevas mutaciones
+    # deben usar únicamente el contrato canónico de cuatro estados.
     VENCIDA = "vencida"
     CANCELADA = "cancelada"
+
+
+ESTADOS_TAREA_CANONICOS = frozenset({
+    EstadoTarea.PENDIENTE,
+    EstadoTarea.EN_CURSO,
+    EstadoTarea.VERIFICACION,
+    EstadoTarea.COMPLETADA,
+})
+
+TRANSICIONES_TAREA: dict[EstadoTarea, frozenset[EstadoTarea]] = {
+    EstadoTarea.PENDIENTE: frozenset({EstadoTarea.EN_CURSO, EstadoTarea.COMPLETADA}),
+    EstadoTarea.EN_CURSO: frozenset({EstadoTarea.VERIFICACION, EstadoTarea.PENDIENTE}),
+    EstadoTarea.VERIFICACION: frozenset({EstadoTarea.COMPLETADA, EstadoTarea.EN_CURSO}),
+    EstadoTarea.COMPLETADA: frozenset(),
+}
 
 
 class EstadoAnimal(str, Enum):
