@@ -272,8 +272,9 @@ seed; no reutilices las credenciales demo.
 - El backend loguea a stdout en formato `LEVEL: logger - mensaje`.
   En Docker, `docker compose logs -f backend`.
 - Health check para un balanceador: `GET /health` (200 si la app y
-  la DB responden). **No** `/health/db` — ese es para diagnóstico
-  manual porque ejecuta queries reales.
+  la DB responden; público). `/api/v1/health/db` es solo diagnóstico
+  manual con rol `admin` (401 sin auth, 403 sin rol) porque ejecuta
+  queries reales; su respuesta nunca incluye secretos.
 - `/api/v1/audit-log` lista las últimas 100 acciones de los usuarios
   (crear animal, cambiar alerta, login, …). Útil para incidentes.
 
@@ -290,6 +291,10 @@ docker compose -p tfm_r3_demo exec -T db pg_dump -U postgres tools4milk | gzip >
 # Restaurar
 gunzip -c /backups/tools4milk-XXXX-XX-XX.sql.gz | docker compose -p tfm_r3_demo exec -T db psql -U postgres -d tools4milk
 ```
+
+La password viaja por entorno del contenedor (`POSTGRES_PASSWORD`), nunca
+en la línea de comandos ni en logs: no uses `PGPASSWORD=` inline ni `-W`
+en estos comandos.
 
 Los JWT (access + refresh) emitidos antes del restore dejarán de ser
 válidos al rotar `SECRET_KEY`. Sin rotación, los access tokens
@@ -375,9 +380,10 @@ git. Los prefijos siguen la convención:
 
 El navegador del usuario lleva DOS cookies HttpOnly tras el login:
 
-- `t4m_token` — access token de 8 h (TTL canónico, `AUTH_COOKIE_MAX_AGE_SECONDS`
-  en `backend/app/security.py`; la demo fija `ACCESS_TOKEN_EXPIRE_MINUTES=480`
-  en `.env`). Se adjunta en cada fetch.
+- `t4m_token` — access token de 8 h (TTL canónico: default
+  `access_token_expire_minutes = 480` en `backend/app/config.py`, Max-Age
+  derivado del setting en `set_auth_cookie`; la demo lo fija además en
+  `.env` por claridad). Se adjunta en cada fetch.
 - `t4m_refresh` — refresh token de 30 días. Se adjunta en cada fetch.
   Lleva `SameSite=Strict` (R22) para máxima protección CSRF.
 

@@ -2,8 +2,8 @@
 
 El usuario recibe TRES credenciales distintas (R12):
 
-  1. **access token** — JWT de vida corta (``access_token_expire_minutes``,
-     por defecto 60 min) que viaja en la cookie ``t4m_token`` (HttpOnly,
+  1. **access token** — JWT de 8 h (``access_token_expire_minutes``,
+     canónico 480, contrato Release 3) que viaja en la cookie ``t4m_token`` (HttpOnly,
      Secure en prod, SameSite=Lax). Es lo que ``get_current_user``
      valida en cada endpoint protegido.
   2. **refresh token** — JWT de vida larga (``refresh_token_expire_days``,

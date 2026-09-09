@@ -23,6 +23,12 @@ from app.time_utils import utc_now
 # clave que el frontend lee en `proxy.ts` para redirigir a /login cuando
 # expira. El navegador es el único que puede leerla (HttpOnly) y el
 # flag Secure se activa en producción (configurable por env).
+#
+# Contrato canónico Release 3: 8 h (480 min), idéntico al default de
+# `settings.access_token_expire_minutes`. `set_auth_cookie` deriva el
+# Max-Age del setting en tiempo de ejecución para que token y cookie no
+# puedan divergir; esta constante queda como referencia/documentación y
+# como valor de respaldo para tests.
 AUTH_COOKIE_NAME = "t4m_token"
 AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 8  # 8 h, alineado con el frontend
 
@@ -247,10 +253,13 @@ def set_auth_cookie(response, token: str) -> None:
     el cookie funcione sobre http://localhost.
     """
     is_prod = settings.environment.lower() == "production"
+    # Max-Age derivado del setting vigente: token y cookie comparten el
+    # mismo TTL canónico (8 h por defecto) y no pueden divergir.
+    max_age = settings.access_token_expire_minutes * 60
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
-        max_age=AUTH_COOKIE_MAX_AGE_SECONDS,
+        max_age=max_age,
         path="/",
         httponly=True,
         secure=is_prod,

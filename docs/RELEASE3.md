@@ -46,7 +46,24 @@ con fallback sintético.
 
 - Auth por cookies HttpOnly (`t4m_token` Lax 8 h canónicas,
   `t4m_refresh` Strict 30 d); el frontend no guarda JWT en storage.
-- `/health` público; `/api/v1/health/db` solo diagnóstico posterior.
+  Contrato único Release 3: el access dura **8 h (480 min)** en un solo
+  sitio — default de `backend/app/config.py`
+  (`access_token_expire_minutes = 480`); la expiración real del JWT
+  (`exp-iat`), el `expires_in` del login y el Max-Age de la cookie derivan
+  de ese setting y no pueden divergir (test
+  `backend/tests/test_release3_hardening.py`). Ningún entorno —incluida
+  producción— depende de la variable demo `ACCESS_TOKEN_EXPIRE_MINUTES`
+  para obtenerlo; la demo la fija en `.env` solo por claridad. El refresh
+  no se alarga (30 d).
+- `/health` público (liveness); `/api/v1/health/db` ejecuta queries reales
+  y exige usuario autenticado con rol `admin`: 401 sin credenciales, 403
+  con otro rol, 200 con diagnóstico útil sin secretos (dialecto, `SELECT 1`,
+  conteos — nunca DSNs, passwords ni tokens).
+- Backend y scheduler (misma imagen) corren como usuario no-root `appuser`
+  (`backend/Dockerfile`); el scheduler escribe un heartbeat
+  (`/tmp/tools4milk-scheduler-alive`) tras cada iteración y Compose lo
+  vigila con un healthcheck de frescura (> 2x intervalo + 10 min = stale).
+  Sin servicio nuevo y sin falsos healthy.
 - Datos exclusivamente sintéticos/ficticios con provenance
   `synthetic/generated`; sin PII ni claims científicos/productivos.
 - La demo no es producción ni recibe datos reales.
@@ -59,3 +76,34 @@ con fallback sintético.
 - Tests unitarios CLI: `python -m pytest tests/test_demo_cli.py -q` (8 tests,
   sin red ni Docker).
 - Backend/frontend: suites habituales (ver CHANGELOG); `git diff --check` limpio.
+
+## Gates CI (job `portable`, Node 24 canónico)
+
+CI conserva los jobs existentes (`backend`, `migrations-pg`, `frontend` con
+Node **24** + `npm run build` portable) y añade `portable`:
+
+- `docker compose -p tfm_r3_ci -f docker-compose.yml config --quiet`
+  (interpolación válida sin levantar nada).
+- `docker build` backend + frontend y verificación de que la imagen
+  backend corre como `appuser` (no-root).
+- `python -m pytest tests/test_demo_cli.py` (CLI stdlib).
+- Snapshot OpenAPI determinista (doble generación + `sha256`, artefacto
+  `openapi-r3`) con presencia de `/api/v1/health/db`.
+- `npx playwright test --list` (las specs compilan; sin fingir ejecución).
+
+## Gate E2E completo (local)
+
+El full stack es intencionadamente local por coste (imágenes + Postgres +
+navegadores). Reproducible así, sin registry ni push:
+
+```bash
+python scripts/demo.py init
+python scripts/demo.py up --build
+python scripts/demo.py smoke
+cd frontend && npx playwright test   # incluye axe en release2-contract
+python scripts/demo.py down --volumes --yes
+```
+
+CI no lo ejecuta; solo garantiza que las specs listan y que el contrato
+OpenAPI es estable. No certificar arquitecturas no ejecutadas: documentado
+amd64/arm64, certificado solo lo ejecutado (ver commit de verificación).

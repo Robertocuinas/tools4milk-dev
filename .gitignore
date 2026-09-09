@@ -132,6 +132,9 @@ frontend/.next/
 frontend/coverage/
 frontend/.vercel/
 frontend/logs/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # ──────────────────────────────────────────────
 # Project specific

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import time
 import sys
 
@@ -17,6 +18,29 @@ if str(ROOT) not in sys.path:
 
 from app.database import SessionLocal  # noqa: E402
 from app.synthetic_scheduler import SchedulerRequest, run_once  # noqa: E402
+
+# Liveness del scheduler (R3): el worker no expone HTTP, así que cada
+# iteración escribe un heartbeat con timestamp. El healthcheck de Compose
+# (servicio `scheduler`) comprueba frescura del fichero: si el proceso se
+# cuelga o muere sin caerse el contenedor, el check falla (sin falso healthy).
+# Ruta sobreescribible por env para tests/entornos sin /tmp escribible.
+HEARTBEAT_FILE = os.environ.get(
+    "SCHEDULER_HEARTBEAT_FILE", "/tmp/tools4milk-scheduler-alive"
+)
+
+
+def write_heartbeat() -> None:
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    try:
+        Path(HEARTBEAT_FILE).write_text(
+            datetime.now(timezone.utc).isoformat(), encoding="utf-8"
+        )
+    except OSError:
+        logging.getLogger("scheduler").warning(
+            "no se pudo escribir heartbeat en %s", HEARTBEAT_FILE
+        )
 
 
 def main() -> int:
@@ -36,6 +60,7 @@ def main() -> int:
         with SessionLocal() as db:
             result = run_once(db, request)
             print(result, flush=True)
+        write_heartbeat()
         if args.once:
             return 0 if result.get("status") in {"ok", "paused"} else 1
         time.sleep(args.interval_seconds)

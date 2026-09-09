@@ -12,6 +12,16 @@ COPY app ./app
 COPY migrations ./migrations
 COPY scripts ./scripts
 
+# Principio de mínimo privilegio (R3): el backend y el scheduler (misma
+# imagen, distinto `command`) corren como usuario no-root. `useradd` existe
+# en la base Debian slim; se fija ownership de /app para que migraciones
+# (lectura) y runtime (imports, sin escritura salvo /tmp) funcionen.
+# Evidencia: `docker exec tfm-backend whoami` -> `appuser`; si un volumen
+# montado impide el arranque por permisos, el error es visible en logs y
+# el healthcheck `/health` no pasa (no hay falso healthy).
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
