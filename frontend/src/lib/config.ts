@@ -10,8 +10,6 @@ export const API_BASE_URL = (
 
 export const API_V1_URL = `${API_BASE_URL}/api/v1`;
 
-// Claves de localStorage. El JWT NO se persiste aquí — vive en una cookie
-// HttpOnly que emite el backend (ver backend/app/security.py::set_auth_cookie).
-export const TOKEN_STORAGE_KEY = "t4m_token";
-export const USER_STORAGE_KEY = "t4m_user";
+// La identidad y las credenciales nunca se guardan en almacenamiento web.
+// La sesión persistente vive únicamente en la cookie HttpOnly del backend.
 export const ACTIVE_ZONE_STORAGE_KEY = "t4m_active_zone";

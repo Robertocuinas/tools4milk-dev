@@ -47,3 +47,16 @@ def test_invalid_operation_and_expected_version_are_rejected(client, auth_header
     )
     assert invalid_operation.status_code == 422
     assert invalid_operation.json()["detail"]["code"] == "invalid_operation_id"
+
+
+def test_delete_requires_version_and_replays(client, auth_headers):
+    task = client.get("/api/v1/tasks", headers=auth_headers).json()[0]
+    missing_contract = client.delete(f"/api/v1/tasks/{task['id']}", headers=auth_headers)
+    assert missing_contract.status_code == 428
+
+    operation_id = str(uuid.uuid4())
+    headers = {**auth_headers, "X-Operation-Id": operation_id}
+    first = client.delete(f"/api/v1/tasks/{task['id']}?expected_version={task['version']}", headers=headers)
+    assert first.status_code == 204, first.text
+    replay = client.delete(f"/api/v1/tasks/{task['id']}?expected_version={task['version']}", headers=headers)
+    assert replay.status_code == 204

@@ -302,7 +302,11 @@ export default function TasksPage() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: (id: string) => api.completeTask(id),
+    mutationFn: (id: string) => {
+      const task = list.find((item) => item.id === id);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.completeTask(task);
+    },
     onSuccess: () => {
       toast.success("Tarea completada");
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

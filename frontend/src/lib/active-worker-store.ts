@@ -16,7 +16,6 @@
 
 import { create } from "zustand";
 
-const WORKER_KEY = "t4m-active-worker";
 
 export type ActiveWorker = {
   id: string;
@@ -38,26 +37,10 @@ export const useActiveWorkerStore = create<ActiveWorkerState>((set) => ({
 
   hydrate: () => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(WORKER_KEY);
-      const worker = raw ? (JSON.parse(raw) as ActiveWorker) : null;
-      set({ worker, isHydrated: true });
-    } catch {
-      set({ worker: null, isHydrated: true });
-    }
+    set({ isHydrated: true });
   },
 
-  setWorker: (w) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(WORKER_KEY, JSON.stringify(w));
-    }
-    set({ worker: w });
-  },
+  setWorker: (w) => set({ worker: w }),
 
-  clearWorker: () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(WORKER_KEY);
-    }
-    set({ worker: null });
-  },
+  clearWorker: () => set({ worker: null }),
 }));

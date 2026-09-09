@@ -271,20 +271,27 @@ export const api = {
     return request<Task>("/tasks", { method: "POST", body: JSON.stringify(body) });
   },
 
-  completeTask(taskId: string, body?: Partial<Task>) {
-    return request<Task>(`/tasks/${taskId}`, {
+  completeTask(task: Pick<Task, "id" | "version">, body: Partial<Task> = {}) {
+    const operationId = crypto.randomUUID();
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${task.id}`, {
       method: "PUT",
+      headers: { "X-Operation-Id": operationId },
       body: JSON.stringify({
         estado: "ejecutada",
         fecha_ejecucion: new Date().toISOString(),
         resultado: "completada",
         ...body,
+        expected_version: task.version,
       }),
     });
   },
 
-  updateTask(taskId: string, body: Partial<Task>) {
-    return request<Task>(`/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(body) });
+  updateTask(task: Pick<Task, "id" | "version">, body: Partial<Task>) {
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${task.id}`, {
+      method: "PUT",
+      headers: { "X-Operation-Id": crypto.randomUUID() },
+      body: JSON.stringify({ ...body, expected_version: task.version }),
+    });
   },
 
   updateTaskIdempotent(taskId: string, body: Partial<Task>, expectedVersion: number, operationId: string) {
@@ -295,8 +302,11 @@ export const api = {
     });
   },
 
-  deleteTask(taskId: string) {
-    return request<void>(`/tasks/${taskId}`, { method: "DELETE" });
+  deleteTask(task: Pick<Task, "id" | "version">) {
+    return request<void>(`/tasks/${task.id}`, {
+      method: "DELETE",
+      headers: { "X-Operation-Id": crypto.randomUUID() },
+    }, { expected_version: task.version });
   },
 
   animals(params?: QueryParams) {

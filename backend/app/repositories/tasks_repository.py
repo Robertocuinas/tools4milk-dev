@@ -154,6 +154,48 @@ def update_idempotent(db: Session, item: TareaEjecucion, data: dict, actor_user_
     return body, False
 
 
+def delete_idempotent(
+    db: Session,
+    item: TareaEjecucion,
+    actor_user_id: uuid.UUID,
+    operation_id: uuid.UUID,
+    expected_version: int,
+    path: str,
+) -> tuple[dict, bool]:
+    """Cancel a task under the same idempotency and optimistic-lock contract."""
+    digest = request_hash("DELETE", path, {"expected_version": expected_version})
+    existing = find_dedupe(db, actor_user_id, operation_id)
+    if existing is not None:
+        if existing.request_hash != digest:
+            body = {"error": {"code": "operation_payload_mismatch", "message": "La operación ya existe con otro payload", "operation_id": str(operation_id)}}
+            raise IdempotencyConflict("operation_payload_mismatch", body["error"]["message"], body)
+        if existing.response_status != 204:
+            error = existing.response_body.get("error", {})
+            raise IdempotencyConflict(str(error.get("code", "operation_rejected")), str(error.get("message", "Operación rechazada")), existing.response_body)
+        return existing.response_body, True
+
+    locked = db.scalar(select(TareaEjecucion).where(TareaEjecucion.id == item.id).with_for_update())
+    if locked is None:
+        body = {"error": {"code": "not_found", "message": "Tarea no encontrada", "operation_id": str(operation_id)}}
+        raise IdempotencyConflict("not_found", body["error"]["message"], body)
+    if not isinstance(expected_version, int) or isinstance(expected_version, bool) or expected_version <= 0:
+        body = {"error": {"code": "invalid_expected_version", "message": "expected_version debe ser un entero positivo", "operation_id": str(operation_id)}}
+        raise IdempotencyConflict("invalid_expected_version", body["error"]["message"], body)
+    if locked.version != expected_version:
+        body = {"error": {"code": "stale_version", "message": "La tarea cambió mientras estaba pendiente", "operation_id": str(operation_id), "expected_version": expected_version, "resource": {"id": str(locked.id), "version": locked.version}}}
+        db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="rejected", response_status=409, response_body=body))
+        db.commit()
+        raise IdempotencyConflict("stale_version", body["error"]["message"], body)
+
+    locked.estado = EstadoTarea.CANCELADA
+    locked.version += 1
+    locked.updated_at = datetime.now(tz=timezone.utc)
+    body = {"operation_id": str(operation_id), "replayed": False}
+    db.add(OperationDedupe(operation_id=operation_id, actor_user_id=actor_user_id, resource_id=locked.id, request_hash=digest, status="applied", response_status=204, response_body=body))
+    db.commit()
+    return body, False
+
+
 def _apply_update(item: TareaEjecucion, data: dict) -> None:
     if "estado" in data:
         next_state = _map_estado(data["estado"])

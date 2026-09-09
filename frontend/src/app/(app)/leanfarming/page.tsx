@@ -353,8 +353,11 @@ export default function LeanFarmingPage() {
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: (data: { id: string; updates: Partial<Task> }) =>
-      api.updateTask(data.id, data.updates),
+    mutationFn: (data: { id: string; updates: Partial<Task> }) => {
+      const task = tasksQuery.data?.find((item) => item.id === data.id);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.updateTask(task, data.updates);
+    },
     onSuccess: () => {
       toast.success("Tarea actualizada");
     },

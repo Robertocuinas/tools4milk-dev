@@ -87,7 +87,7 @@ function TaskFormModal({
   const mutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
       if (isEdit) {
-        return api.updateTask(task!.id, payload as Partial<Task>);
+        return api.updateTask(task!, payload as Partial<Task>);
       } else {
         return api.createTask(payload as Partial<Task>);
       }
@@ -258,7 +258,7 @@ function TaskRow({
   const [editing, setEditing] = useState(false);
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.deleteTask(task.id),
+    mutationFn: () => api.deleteTask(task),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks-all-lean"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
