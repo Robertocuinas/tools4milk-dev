@@ -21,6 +21,7 @@ from app.models.tools4milk import (
     SchedulerRun,
     SchedulerState,
     SyntheticProvenance,
+    OperationDedupe,
 
     TareaEjecucion,
     TareaRecurrente,
@@ -224,7 +225,7 @@ def run_once(db: Session, request: SchedulerRequest = SchedulerRequest()) -> dic
 
 
 def reset_synthetic(db: Session) -> dict[str, int]:
-    """Elimina solo materialización/provenance sintética; no toca datos reales."""
+    """Elimina materialización sintética y sus deduplicaciones de demo."""
     if db.in_transaction():
         db.commit()
     with db.begin():
@@ -233,4 +234,8 @@ def reset_synthetic(db: Session) -> dict[str, int]:
         deleted_tasks = db.query(TareaEjecucion).filter(TareaEjecucion.id.in_(provenance_ids)).delete(synchronize_session=False) if provenance_ids else 0
         deleted_prov = db.query(SyntheticProvenance).filter(SyntheticProvenance.source == "synthetic/generated").delete(synchronize_session=False)
         deleted_rec = db.query(TareaRecurrente).filter(TareaRecurrente.id.in_(recurrence_ids)).delete(synchronize_session=False) if recurrence_ids else 0
-    return {"tasks": int(deleted_tasks), "recurrences": int(deleted_rec), "provenance": int(deleted_prov)}
+        # operation_dedupe has no TTL by design; an administered synthetic
+        # reset must remove only rows tied to reset materialization.
+        dedupe_ids = [row.resource_id for row in db.scalars(select(OperationDedupe).where(OperationDedupe.resource_id.in_(provenance_ids))).all()] if provenance_ids else []
+        deleted_dedupe = db.query(OperationDedupe).filter(OperationDedupe.resource_id.in_(dedupe_ids)).delete(synchronize_session=False) if dedupe_ids else 0
+    return {"tasks": int(deleted_tasks), "recurrences": int(deleted_rec), "provenance": int(deleted_prov), "operation_dedupe": int(deleted_dedupe)}

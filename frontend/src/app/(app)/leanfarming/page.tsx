@@ -23,10 +23,12 @@ import { WeeklyPlanView } from "@/components/leanfarming/WeeklyPlanView";
 import { ZonePlanView } from "@/components/leanfarming/ZonePlanView";
 import { WorkloadView } from "@/components/leanfarming/WorkloadView";
 import { TaskCatalogView } from "@/components/leanfarming/TaskCatalogView";
+import { ConnectivityBanner } from "@/components/leanfarming/ConnectivityBanner";
 import { api } from "@/lib/api";
 import { TV_REFETCH, TV_STALE } from "@/lib/tv-constants";
 import { visualZoneSummaries } from "@/lib/visual-zones";
 import type { Task } from "@/lib/types";
+import { canQueueOffline, enqueueTaskMutation } from "@/lib/offline-outbox";
 
 type ViewMode = "zonas" | "lista";
 type ZoneStatus = "critica" | "atencion" | "operativa" | "inactiva";
@@ -318,9 +320,28 @@ export default function LeanFarmingPage() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: (id: string) => api.completeTask(id),
+    mutationFn: async (id: string) => {
+      const task = tasksQuery.data?.find((item) => item.id === id);
+      if (!task) throw new Error("Tarea no encontrada");
+      const operationId = crypto.randomUUID();
+      const updates: Partial<Task> & Record<string, unknown> = { estado: "ejecutada", fecha_ejecucion: new Date().toISOString(), resultado: "completada" };
+      if (!navigator.onLine) {
+        if (!canQueueOffline()) throw new Error("Sin conexión y este navegador no permite guardar cambios offline");
+        await enqueueTaskMutation(task, updates, undefined, operationId);
+        return { queued: true };
+      }
+      try {
+        return await api.updateTaskIdempotent(id, updates, task.version, operationId);
+      } catch (error) {
+        if (canQueueOffline() && error instanceof Error && error.message.startsWith("No se puede conectar")) {
+          await enqueueTaskMutation(task, updates, undefined, operationId);
+          return { queued: true };
+        }
+        throw error;
+      }
+    },
     onSuccess: () => {
-      toast.success("Tarea completada");
+      toast.success("Tarea completada o guardada para sincronizar");
     },
     onError: (err: Error) => {
       toast.error(err.message || "Error al completar la tarea");
@@ -332,8 +353,11 @@ export default function LeanFarmingPage() {
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: (data: { id: string; updates: Partial<Task> }) =>
-      api.updateTask(data.id, data.updates),
+    mutationFn: (data: { id: string; updates: Partial<Task> }) => {
+      const task = tasksQuery.data?.find((item) => item.id === data.id);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.updateTask(task, data.updates);
+    },
     onSuccess: () => {
       toast.success("Tarea actualizada");
     },
@@ -426,6 +450,7 @@ export default function LeanFarmingPage() {
 
   return (
     <div className="min-h-full bg-app-bg text-app-text">
+      <ConnectivityBanner />
       <div className="border-b border-app-border px-6 py-5 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

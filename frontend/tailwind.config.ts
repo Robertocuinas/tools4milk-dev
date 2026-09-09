@@ -16,7 +16,7 @@ const config: Config = {
           surface: "#FFFFFF",
           border: "#D9E6DE",
           text: "#101B14",
-          dim: "#65786D",
+          dim: "#4D6054",
         },
         tv: {
           bg: "#EEF3F0",
@@ -24,12 +24,12 @@ const config: Config = {
           surface2: "#F8FAFB",
           border: "#D9E6DE",
           text: "#101B14",
-          dim: "#65786D",
+          dim: "#4D6054",
           accent: "#22C55E",
         },
         state: {
           critica: "#DC2626",
-          atencion: "#D97706",
+          atencion: "#9A4D00",
           ok: "#16A34A",
           info: "#2563EB",
           neutral: "#64748B",

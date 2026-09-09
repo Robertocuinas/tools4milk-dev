@@ -22,13 +22,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Capability } from "@/lib/role-capabilities";
 import { roleDisplayName } from "@/lib/role-capabilities";
 import { useActiveWorkerStore } from "@/lib/active-worker-store";
 import { usePermissions } from "@/lib/use-permissions";
 import { SessionKeeper } from "@/components/providers/session-keeper";
 import { useAppStore } from "@/store/app-store";
+import { api } from "@/lib/api";
 
 type NavItem = {
   href: string;
@@ -37,6 +38,23 @@ type NavItem = {
   /** If set, item is only shown when the user has this capability */
   capability?: Capability;
 };
+
+function subscribeToConnectivity(callback: () => void): () => void {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => {
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
+  };
+}
+
+function getOnlineSnapshot(): boolean {
+  return window.navigator.onLine;
+}
+
+function getServerOnlineSnapshot(): boolean {
+  return true;
+}
 
 const navGroups: { label: string; items: NavItem[] }[] = [
   {
@@ -92,10 +110,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrate = useAppStore((state) => state.hydrate);
   const isHydrated = useAppStore((state) => state.isHydrated);
   const user = useAppStore((state) => state.user);
+  const setSession = useAppStore((state) => state.setSession);
   const logout = useAppStore((state) => state.logout);
   const { can, role } = usePermissions();
   const workerHydrate = useActiveWorkerStore((s) => s.hydrate);
   const activeWorker = useActiveWorkerStore((s) => s.worker);
+  const online = useSyncExternalStore(
+    subscribeToConnectivity,
+    getOnlineSnapshot,
+    getServerOnlineSnapshot,
+  );
+  const offline = !online;
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -103,15 +129,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [hydrate, workerHydrate]);
 
   useEffect(() => {
+    if (!isHydrated || user || offline) return;
+    let mounted = true;
+    api.me()
+      .then(setSession)
+      .catch(() => router.replace("/"))
+      .finally(() => {
+        if (mounted) setSessionChecked(true);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [isHydrated, user, offline, router, setSession]);
+
+  useEffect(() => {
     // El JWT vive en una cookie HttpOnly; el ``proxy.ts`` ya redirige si
     // la cookie no está presente. Aquí solo necesitamos ``user`` para
     // renderizar la sidebar. Si la cookie está caducada, la primera
     // llamada a la API (en una página hija) recibirá 401 y se manejará
     // allí; en este layout basta con no redirigir dos veces.
-    if (isHydrated && !user) router.replace("/");
-  }, [isHydrated, user, router]);
+    if (isHydrated && !user && !offline && sessionChecked) router.replace("/");
+  }, [isHydrated, user, offline, sessionChecked, router]);
 
-  if (!isHydrated || !user) {
+  // Tras una recarga offline la identidad en memoria se pierde, pero la
+  // cookie HttpOnly sigue siendo válida y la shell debe poder mostrar la
+  // página cacheada/degradada para que la outbox siga siendo utilizable.
+  // En online mantenemos el gate estricto y redirigimos si no hay sesión.
+  if (!isHydrated || (!user && !offline && !sessionChecked)) {
     return (
       <div className="grid min-h-screen place-items-center bg-app-bg">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />

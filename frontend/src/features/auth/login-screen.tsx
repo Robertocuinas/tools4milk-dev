@@ -60,7 +60,7 @@ function StatusDot({ online, loading = false }: { online: boolean; loading?: boo
 export function LoginScreen() {
   const router = useRouter();
   const hydrate = useAppStore((state) => state.hydrate);
-  const user = useAppStore((state) => state.user);
+
   const isHydrated = useAppStore((state) => state.isHydrated);
   const selectedRole = useAppStore((state) => state.selectedRole);
   const setSelectedRole = useAppStore((state) => state.setSelectedRole);
@@ -72,17 +72,17 @@ export function LoginScreen() {
 
   useEffect(() => { hydrate(); }, [hydrate]);
   useEffect(() => {
-    // Si ya hay user en localStorage y además el backend reconoce la cookie,
-    // saltamos al dashboard. El backend es la fuente de verdad.
-    if (!isHydrated || !user) return;
+    // La cookie HttpOnly es la única sesión persistente; rehidratar identidad desde el backend.
+    if (!isHydrated) return;
     api.me()
-      .then(() => router.replace("/dashboard"))
+      .then((currentUser) => {
+        setSession(currentUser);
+        router.replace("/dashboard");
+      })
       .catch(() => {
-        // Cookie caducada o inválida — limpiamos estado y dejamos al usuario
-        // volver a hacer login en este mismo formulario.
         useAppStore.getState().logout();
       });
-  }, [isHydrated, user, router]);
+  }, [isHydrated, router, setSession]);
 
   const health = useQuery({
     queryKey: ["health"],
@@ -272,7 +272,7 @@ export function LoginScreen() {
                 <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-[#2f6f45]">
                   Accesos de prueba
                 </h3>
-                <p className="mb-4 text-xs text-[#7a9b8a]">
+                <p className="mb-4 text-xs text-[#4f6f5b]">
                   Selecciona un usuario para rellenar automáticamente.
                 </p>
                 <div className="space-y-2">
@@ -288,7 +288,7 @@ export function LoginScreen() {
                       className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition hover:bg-[#f0f8f4]"
                     >
                       <span className="font-mono text-sm font-semibold text-[#1f5a35]">{demo.username}</span>
-                      <span className="text-xs text-[#7a9b8a]">{demo.label}</span>
+                      <span className="text-xs text-[#4f6f5b]">{demo.label}</span>
                     </button>
                   ))}
                 </div>
@@ -296,7 +296,7 @@ export function LoginScreen() {
             )}
 
             {/* Backend status — small indicator */}
-            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#7a9b8a]">
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#4f6f5b]">
               <StatusDot online={backendOnline} loading={health.isLoading} />
               {health.isLoading ? "Verificando conexión…"
                 : backendOnline ? "Sistema conectado"

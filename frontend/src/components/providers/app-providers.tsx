@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ToastProvider } from "@/components/ui/toast";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -22,6 +22,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

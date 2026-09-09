@@ -174,7 +174,11 @@ function TreatmentModal({ animals, onClose }: { animals: Animal[]; onClose: () =
 function TaskList({ tasks, canComplete }: { tasks: Task[]; canComplete: boolean }) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (taskId: string) => api.completeTask(taskId),
+    mutationFn: (taskId: string) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.completeTask(task);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["zone-tasks"] }),
   });
 

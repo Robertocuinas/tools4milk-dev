@@ -1,3 +1,6 @@
+import uuid
+
+
 def test_operational_e2e_flow(client, auth_headers):
     dashboard = client.get("/api/v1/dashboard/summary", headers=auth_headers)
     assert dashboard.status_code == 200
@@ -23,11 +26,11 @@ def test_operational_e2e_flow(client, auth_headers):
 
     completed = client.put(
         f"/api/v1/tasks/{task.json()['id']}",
-        headers=auth_headers,
-        json={"estado": "ejecutada", "resultado": "ok", "observaciones": "Flujo E2E completado"},
+        headers={**auth_headers, "X-Operation-Id": str(uuid.uuid4())},
+        json={"estado": "ejecutada", "resultado": "ok", "observaciones": "Flujo E2E completado", "expected_version": 1},
     )
     assert completed.status_code == 200
-    assert completed.json()["estado"] == "ejecutada"
+    assert completed.json()["task"]["estado"] == "ejecutada"
 
     incident = client.post(
         "/api/v1/incidents",

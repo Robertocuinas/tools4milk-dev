@@ -132,30 +132,39 @@ export function ZoneTabletView({
   const [noteText, setNoteText] = useState("");
 
   const startTaskMutation = useMutation({
-    mutationFn: (taskId: string) =>
-      api.updateTask(taskId, {
+    mutationFn: (taskId: string) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.updateTask(task, {
         estado: "pausada",
-      } as Parameters<typeof api.updateTask>[1]),
+      } as Parameters<typeof api.updateTask>[1]);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["zone-tasks"] });
     },
   });
 
   const completeTaskMutation = useMutation({
-    mutationFn: (taskId: string) =>
-      api.updateTask(taskId, {
+    mutationFn: (taskId: string) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.updateTask(task, {
         estado: "ejecutada",
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["zone-tasks"] });
     },
   });
 
   const addNoteMutation = useMutation({
-    mutationFn: (taskId: string) =>
-      api.updateTask(taskId, {
+    mutationFn: (taskId: string) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) throw new Error("Tarea no encontrada");
+      return api.updateTask(task, {
         observaciones: noteText,
-      } as Parameters<typeof api.updateTask>[1]),
+      } as Parameters<typeof api.updateTask>[1]);
+    },
     onSuccess: () => {
       setSelectedTaskForNote(null);
       setNoteText("");

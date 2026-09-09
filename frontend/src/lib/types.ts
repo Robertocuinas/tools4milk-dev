@@ -112,6 +112,8 @@ export type Task = {
   motivo_retraso?: string | null;
   requiere_seguimiento: boolean;
   fecha_seguimiento?: string | null;
+  version: number;
+  updated_at?: string | null;
 };
 
 export type Animal = {

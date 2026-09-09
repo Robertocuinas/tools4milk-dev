@@ -182,6 +182,7 @@ async function request<T>(path: string, init: RequestInit = {}, params?: QueryPa
     try {
       const payload = await response.json();
       if (typeof payload.detail === "string") detail = payload.detail;
+      else if (payload.detail?.message) detail = `${payload.detail.code ?? response.status}: ${payload.detail.message}`;
     } catch {
       // Keep the HTTP fallback message.
     }
@@ -270,24 +271,42 @@ export const api = {
     return request<Task>("/tasks", { method: "POST", body: JSON.stringify(body) });
   },
 
-  completeTask(taskId: string, body?: Partial<Task>) {
-    return request<Task>(`/tasks/${taskId}`, {
+  completeTask(task: Pick<Task, "id" | "version">, body: Partial<Task> = {}) {
+    const operationId = crypto.randomUUID();
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${task.id}`, {
       method: "PUT",
+      headers: { "X-Operation-Id": operationId },
       body: JSON.stringify({
         estado: "ejecutada",
         fecha_ejecucion: new Date().toISOString(),
         resultado: "completada",
         ...body,
+        expected_version: task.version,
       }),
     });
   },
 
-  updateTask(taskId: string, body: Partial<Task>) {
-    return request<Task>(`/tasks/${taskId}`, { method: "PUT", body: JSON.stringify(body) });
+  updateTask(task: Pick<Task, "id" | "version">, body: Partial<Task>) {
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${task.id}`, {
+      method: "PUT",
+      headers: { "X-Operation-Id": crypto.randomUUID() },
+      body: JSON.stringify({ ...body, expected_version: task.version }),
+    });
   },
 
-  deleteTask(taskId: string) {
-    return request<void>(`/tasks/${taskId}`, { method: "DELETE" });
+  updateTaskIdempotent(taskId: string, body: Partial<Task>, expectedVersion: number, operationId: string) {
+    return request<{ operation_id: string; replayed: boolean; task: Task }>(`/tasks/${taskId}`, {
+      method: "PUT",
+      headers: { "X-Operation-Id": operationId },
+      body: JSON.stringify({ ...body, expected_version: expectedVersion }),
+    });
+  },
+
+  deleteTask(task: Pick<Task, "id" | "version">) {
+    return request<void>(`/tasks/${task.id}`, {
+      method: "DELETE",
+      headers: { "X-Operation-Id": crypto.randomUUID() },
+    }, { expected_version: task.version });
   },
 
   animals(params?: QueryParams) {

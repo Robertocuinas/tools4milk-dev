@@ -25,6 +25,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -401,9 +402,33 @@ class TareaEjecucion(Base):
     turno_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("turnos.id"))
     notas: Mapped[str | None] = mapped_column(Text)
     creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
     catalogo: Mapped[TareaCatalogo] = relationship("TareaCatalogo", foreign_keys=[catalogo_id])
     empleado: Mapped[Empleado | None] = relationship("Empleado", foreign_keys=[empleado_id])
+
+
+class OperationDedupe(Base):
+    """Resultado durable de una mutación idempotente por actor."""
+
+    __tablename__ = "operation_dedupe"
+    __table_args__ = (
+        UniqueConstraint("actor_user_id", "operation_id"),
+        CheckConstraint("response_status >= 100 AND response_status <= 599", name="ck_operation_response_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    operation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("usuarios.id"), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(40), nullable=False, default="task")
+    resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    response_status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    response_body: Mapped[dict] = mapped_column(POSTGRES_JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
 
 # ---------------------------------------------------------------------------
