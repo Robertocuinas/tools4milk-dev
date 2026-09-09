@@ -2,10 +2,10 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.tools4milk import TareaCatalogo
+from app.models.tools4milk import OperationDedupe, TareaCatalogo
 from app.repositories import tasks_repository
 from app.routers.deps import AdminOnly, DbSession, TaskManager
 from app.security import get_current_user
@@ -202,6 +202,14 @@ def create_task(payload: dict[str, Any], db: DbSession, _user: TaskManager) -> d
     return tasks_service.serialize(ejecucion, catalogo)
 
 
+@router.get("/tasks/release2-metrics")
+def release2_metrics(db: DbSession) -> dict[str, int]:
+    """Minimal authenticated counters derived from durable idempotency rows."""
+    applied = db.scalar(select(func.count()).select_from(OperationDedupe).where(OperationDedupe.status == "applied")) or 0
+    conflicts = db.scalar(select(func.count()).select_from(OperationDedupe).where(OperationDedupe.response_status == 409)) or 0
+    return {"deduplicated": int(applied), "conflicts": int(conflicts)}
+
+
 @router.get("/tasks/{task_id}")
 def task_detail(task_id: str, db: DbSession) -> dict[str, Any]:
     row = tasks_repository.get_by_id(db, task_id)
@@ -222,12 +230,10 @@ def update_task(
     if row is None:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
     if operation_id is None:
-        try:
-            ejecucion, catalogo = tasks_repository.update(db, row[0], payload)
-        except ValueError as exc:
-            db.rollback()
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return tasks_service.serialize(ejecucion, catalogo)
+        raise HTTPException(
+            status_code=428,
+            detail={"code": "operation_id_required", "message": "X-Operation-Id es obligatorio para mutaciones Release 2"},
+        )
 
     try:
         parsed_operation_id = uuid.UUID(operation_id)

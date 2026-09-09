@@ -502,7 +502,8 @@ export function ZonePlanView({ tasks, zones, employees, catalog }: ZonePlanViewP
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
-        <select
+        <label htmlFor="zone-plan-filter" className="sr-only">Filtrar por zona</label>
+        <select id="zone-plan-filter"
           value={selectedZone}
           onChange={(e) => setSelectedZone(e.target.value)}
           className="h-9 rounded-[10px] border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-brand"

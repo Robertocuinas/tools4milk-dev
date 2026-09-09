@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.enums import EstadoTarea, ESTADOS_TAREA_CANONICOS, TRANSICIONES_TAREA
@@ -90,6 +90,14 @@ def request_hash(method: str, path: str, payload: dict) -> str:
 
 
 def find_dedupe(db: Session, actor_user_id: uuid.UUID, operation_id: uuid.UUID) -> OperationDedupe | None:
+    # PostgreSQL's unique constraint is not enough: two transactions can both
+    # miss the row and one would otherwise surface IntegrityError.  A
+    # transaction-scoped advisory lock serializes only this deterministic key.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"tools4milk:task-operation:{actor_user_id}:{operation_id}"},
+        )
     return db.scalar(
         select(OperationDedupe)
         .where(OperationDedupe.actor_user_id == actor_user_id, OperationDedupe.operation_id == operation_id)

@@ -82,11 +82,9 @@ export function WeeklyPlanView({
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
         <div>
-          <label className="text-xs font-semibold uppercase text-app-dim mb-2 block">
-            Zona
-          </label>
-          <select
-            value={selectedZoneFilter}
+          <label htmlFor="weekly-zone-filter" className="text-xs font-semibold uppercase text-app-dim mb-2 block">Zona</label>
+          <select id="weekly-zone-filter"
+                      value={selectedZoneFilter}
             onChange={(e) => setSelectedZoneFilter(e.target.value)}
             className="rounded-[10px] border border-app-border px-3 py-2 text-sm bg-white"
           >
@@ -100,11 +98,9 @@ export function WeeklyPlanView({
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase text-app-dim mb-2 block">
-            Estado
-          </label>
-          <select
-            value={selectedStateFilter}
+          <label htmlFor="weekly-state-filter" className="text-xs font-semibold uppercase text-app-dim mb-2 block">Estado</label>
+          <select id="weekly-state-filter"
+                      value={selectedStateFilter}
             onChange={(e) => setSelectedStateFilter(e.target.value)}
             className="rounded-[10px] border border-app-border px-3 py-2 text-sm bg-white"
           >

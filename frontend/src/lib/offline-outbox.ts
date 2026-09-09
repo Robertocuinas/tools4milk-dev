@@ -17,6 +17,8 @@ export type OutboxOperation = {
   lastErrorMessage?: string;
   sessionUserId?: string;
 };
+export type SyncMetrics = { queued: number; synced: number; deduplicated: number; conflicts: number; failed: number; retry_count: number };
+const EMPTY_METRICS: SyncMetrics = { queued: 0, synced: 0, deduplicated: 0, conflicts: 0, failed: 0, retry_count: 0 };
 
 const DB_NAME = "tools4milk-release2";
 const DB_VERSION = 1;
@@ -53,15 +55,27 @@ function transaction<T>(store: string, mode: IDBTransactionMode, action: (object
 
 export function canQueueOffline(): boolean { return supported(); }
 
-export async function enqueueTaskMutation(task: Pick<Task, "id" | "version">, body: Record<string, unknown>, sessionUserId?: string): Promise<OutboxOperation> {
+export async function enqueueTaskMutation(task: Pick<Task, "id" | "version">, body: Record<string, unknown>, sessionUserId?: string, operationId = crypto.randomUUID()): Promise<OutboxOperation> {
   if (!supported()) throw new Error("Este navegador no permite cola offline; conecta para cambiar estados");
   const operation: OutboxOperation = {
-    operationId: crypto.randomUUID(), taskId: task.id, body: { ...body, expected_version: task.version },
+    operationId, taskId: task.id, body: { ...body, expected_version: task.version },
     expectedVersion: task.version, createdAt: new Date().toISOString(), attempts: 0,
     nextAttemptAt: Date.now(), state: "queued", sessionUserId,
   };
   await transaction(OUTBOX, "readwrite", (store) => store.add(operation));
+  await incrementMetric("queued");
   return operation;
+}
+
+export async function getSyncMetrics(): Promise<SyncMetrics> {
+  if (!supported()) return { ...EMPTY_METRICS };
+  return ((await transaction(META, "readonly", (store) => store.get("metrics")).catch(() => undefined)) as SyncMetrics | undefined) ?? { ...EMPTY_METRICS };
+}
+
+async function incrementMetric(metric: keyof SyncMetrics, amount = 1): Promise<void> {
+  const current = await getSyncMetrics();
+  current[metric] += amount;
+  await transaction(META, "readwrite", (store) => store.put({ id: "metrics", ...current }));
 }
 
 export async function listOutbox(): Promise<OutboxOperation[]> {
@@ -110,17 +124,20 @@ export async function syncOutbox(onState?: (operation: OutboxOperation) => void)
         await updateOutbox(operation); onState?.(operation); break;
       }
       if (response.ok) {
+        const result = await response.clone().json().catch(() => ({})) as { replayed?: boolean };
         operation.state = "synced"; await updateOutbox(operation); await removeOutbox(operation.operationId);
-        synced += 1; onState?.(operation); continue;
+        synced += 1; await incrementMetric(result.replayed ? "deduplicated" : "synced"); onState?.(operation); continue;
       }
       operation.state = nextStateFromStatus(response.status); operation.lastErrorCode = `http_${response.status}`;
       operation.lastErrorMessage = response.status === 409 ? "Conflicto: revisa el estado remoto" : `Sincronización rechazada (${response.status})`;
       await updateOutbox(operation); onState?.(operation);
+      await incrementMetric(operation.state === "conflict" ? "conflicts" : "failed");
     } catch {
       operation.attempts += 1; operation.state = operation.attempts >= 5 ? "failed" : "queued";
       operation.nextAttemptAt = Date.now() + backoffMs(operation.attempts); operation.lastErrorCode = "network_error";
       operation.lastErrorMessage = operation.state === "failed" ? "Se agotaron los reintentos automáticos" : "Error de red; se reintentará";
       await updateOutbox(operation); onState?.(operation);
+      await incrementMetric("retry_count");
     }
   }
   return { synced, pending: (await listOutbox()).length, paused };
