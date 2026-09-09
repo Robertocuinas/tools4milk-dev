@@ -1,12 +1,17 @@
-"""Población de datos realistas para Tools4Milk (explotación de Villalba, Lugo).
+"""Población de datos sintéticos de demostración para Tools4Milk
+(explotación ficticia inspirada en Villalba, Lugo).
 
 Objetivo: dejar la aplicación visualizable como funcional (dashboard, animales,
 calidad, tareas, alertas, incidencias, turnos, relevos, pedidos, recría y
-meteorología) con datos coherentes y NO etiquetados como "demo".
+meteorología) con datos sintéticos coherentes, identificados como
+``synthetic/generated`` (demo).
+
+Todos los datos generados son ficticios: identidades, valores y series
+temporales son ilustrativos, sin validación productiva ni datos reales.
 
 Características:
 - Idempotente: cada bloque solo siembra si su tabla está vacía. Re-ejecutarlo no
-  duplica filas y NO toca datos reales existentes.
+  duplica filas y NO toca datos preexistentes.
 - Standalone y manual: NO se ejecuta en el arranque ni en el Dockerfile. Lo lanza
   deliberadamente quien administra la base de datos.
 - Sin dependencias extra (no usa Faker): nombres y valores curados.
@@ -26,7 +31,7 @@ from __future__ import annotations
 import argparse
 import random
 import sys
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -39,7 +44,7 @@ from sqlalchemy import func, select  # noqa: E402
 
 from app.database import SessionLocal  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.enums import EstadoAnimal, EstadoTarea, NivelAlerta, TipoTurno  # noqa: E402
+from app.enums import EstadoAnimal, EstadoTarea, NivelAlerta, TipoMaquinaria, TipoTurno  # noqa: E402
 from app.models.tools4milk import (  # noqa: E402
     Alerta,
     AsignacionTurno,
@@ -50,6 +55,7 @@ from app.models.tools4milk import (  # noqa: E402
     Incidencia,
     Lactacion,
     LecturaMeteo,
+    LecturaRobotOrdeno,
     Maquinaria,
     Pedido,
     ResumenRelevo,
@@ -545,6 +551,59 @@ def seed_meteo(db, dias: int) -> None:
     print(f"OK lecturas_meteorologia: {dias}")
 
 
+def seed_lecturas_robot(db, today: date, dias: int = 30) -> None:
+    """Siembra una serie diaria sintética por animal en lactación.
+
+    Datos ficticios deterministas (RNG con semilla fija) derivados de los
+    promedios de cada lactación activa: no son mediciones reales. Idempotente:
+    solo siembra si ``lecturas_robot_ordeno`` está vacía. Si no hay robots de
+    ordeño registrados, no hace nada.
+    """
+    if _count(db, LecturaRobotOrdeno) > 0:
+        print("SKIP lecturas_robot_ordeno (ya hay datos)")
+        return
+    robots = db.scalars(
+        select(Maquinaria).where(Maquinaria.tipo == TipoMaquinaria.ROBOT_ORDENO).order_by(Maquinaria.nombre)
+    ).all()
+    if not robots:
+        print("SKIP lecturas_robot_ordeno (sin robots de ordeño)")
+        return
+    lactaciones = db.scalars(select(Lactacion).where(Lactacion.fecha_secado.is_(None))).all()
+    if not lactaciones:
+        print("SKIP lecturas_robot_ordeno (sin lactaciones activas)")
+        return
+    base = datetime(today.year, today.month, today.day, 6, 0, tzinfo=timezone.utc)
+    n = 0
+    for idx, lact in enumerate(lactaciones):
+        dias_en_leche = max(1, (today - lact.fecha_parto).days) if lact.fecha_parto else 120
+        media_diaria = float(lact.produccion_total_kg) / dias_en_leche if lact.produccion_total_kg else 30.0
+        rcs_base = lact.rcs_promedio or 150000
+        robot = robots[idx % len(robots)]
+        for d in range(dias):
+            # Minutos escalonados por animal para no colisionar la PK (ts, robot_id).
+            ts = base - timedelta(days=dias - 1 - d) + timedelta(minutes=idx)
+            produccion = round(media_diaria + RNG.uniform(-2.5, 2.5), 2)
+            scc = max(1000, rcs_base + RNG.randint(-25000, 25000))
+            db.add(
+                LecturaRobotOrdeno(
+                    ts=ts,
+                    robot_id=robot.id,
+                    animal_id=lact.animal_id,
+                    lactacion_id=lact.id,
+                    produccion_kg=Decimal(str(produccion)),
+                    conductividad=Decimal(str(round(RNG.uniform(4.5, 6.5), 2))),
+                    flujo_max=Decimal(str(round(RNG.uniform(2.0, 4.5), 2))),
+                    scc=scc,
+                    duracion_min=Decimal(str(round(RNG.uniform(5.0, 9.0), 1))),
+                    intentos_fallidos=0,
+                    alerta_robot=False,
+                )
+            )
+            n += 1
+    db.commit()
+    print(f"OK lecturas_robot_ordeno: {n} (serie sintetica de {dias} dias)")
+
+
 def print_status(db) -> None:
     pares = [
         ("zonas", Zona), ("maquinaria", Maquinaria), ("empleados", Empleado),
@@ -552,7 +611,7 @@ def print_status(db) -> None:
         ("eventos_sanitarios", EventoSanitario), ("incidencias", Incidencia), ("alertas", Alerta),
         ("tareas_ejecuciones", TareaEjecucion), ("turnos", Turno), ("asignaciones_turno", AsignacionTurno),
         ("resumenes_relevo", ResumenRelevo), ("pedidos", Pedido), ("boxes_recria", BoxRecria),
-        ("lecturas_meteorologia", LecturaMeteo),
+        ("lecturas_meteorologia", LecturaMeteo), ("lecturas_robot_ordeno", LecturaRobotOrdeno),
     ]
     print("Recuentos actuales:")
     for nombre, model in pares:
@@ -607,6 +666,7 @@ def main() -> None:
         seed_pedidos(db)
         seed_boxes(db, today)
         seed_meteo(db, args.weather_days)
+        seed_lecturas_robot(db, today)
         print("\nListo. Estado final:")
         print_status(db)
     finally:

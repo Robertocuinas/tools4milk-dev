@@ -42,3 +42,25 @@ def test_openapi_has_examples_for_core_frontend_flows():
         assert "422" in operation["responses"]
         assert "500" in operation["responses"]
         assert operation["operationId"]
+
+
+def test_openapi_expone_serie_temporal_por_animal():
+    """Release 4 DSS: GET /animals/{animal_id}/readings documentado y protegido."""
+    with TestClient(app) as client:
+        schema = client.get("/openapi.json").json()
+
+    path = schema["paths"]["/api/v1/animals/{animal_id}/readings"]["get"]
+    assert path["operationId"] == "list_animal_readings"
+    assert "404" in path["responses"]
+    assert "422" in path["responses"]
+    assert "examples" in path["responses"]["200"]["content"]["application/json"]
+    params = {p["name"] for p in path.get("parameters", [])}
+    assert {"days", "limit"} <= params
+    assert path["security"] == [{"HTTPBearer": []}]
+    assert path["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/AnimalReadingsResponse"
+    }
+    response_schema = schema["components"]["schemas"]["AnimalReadingsResponse"]
+    assert {"animal_id", "provenance", "count", "days", "limit", "readings"} <= set(
+        response_schema["required"]
+    )

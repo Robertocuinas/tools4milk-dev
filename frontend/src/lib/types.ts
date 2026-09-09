@@ -415,6 +415,25 @@ export type QualitySummary = {
   animales_en_control: number;
 };
 
+export type AnimalReading = {
+  ts: string;
+  fecha: string;
+  produccion_kg: number | null;
+  scc: number | null;
+  conductividad: number | null;
+  flujo_max: number | null;
+  duracion_min: number | null;
+};
+
+export type AnimalReadingsResponse = {
+  animal_id: string;
+  provenance: { source: string; mode: string; synthetic: boolean };
+  count: number;
+  days: number;
+  limit: number;
+  readings: AnimalReading[];
+};
+
 export type Employee = {
   id: string;
   nombre: string;

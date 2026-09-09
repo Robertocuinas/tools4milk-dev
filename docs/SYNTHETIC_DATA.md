@@ -15,7 +15,10 @@ Contrato
 - Las distribuciones son ilustrativas y no están validadas científicamente.
 
 Perfiles: `small` (8 animales), `demo` (200 animales, 30 días y turnos manana/tarde)
-y `load` (1000 animales para volumen, no capacidad productiva).
+y `load` (1000 animales para volumen, no capacidad productiva). Cada perfil
+incluye 30 lecturas diarias de robot por animal (`milk_readings`), con UUID5,
+seed y provenance reproducibles; producción y células somáticas son valores
+ilustrativos, no mediciones ni recomendaciones clínicas.
 
 Escenarios: `normal`, `delayed_tasks`, `critical_machinery`, `health_alert`,
 `seasonal_variation`, `degraded_quality`, `aemet_failure`,

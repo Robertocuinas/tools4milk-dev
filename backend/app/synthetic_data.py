@@ -79,10 +79,33 @@ def generate_dataset(request: GenerationRequest = GenerationRequest()) -> dict[s
         machinery[0]["status"] = "averiada"
     animals = []
     lactations = []
+    milk_readings = []
     for i in range(count):
         animal_id = _id(request, "animal", str(i))
+        lactation_id = _id(request, "lactation", str(i))
+        daily_kg = 28.0 + (i % 9) * 0.5
         animals.append(_record(request, "animal", str(i), id=animal_id, tag=f"SYN-{i + 1:05d}", name=f"Animal Sintético {i + 1:05d}", sex="hembra", status="produccion", zone_id=zones[0]["id"]))
-        lactations.append(_record(request, "lactation", str(i), animal_id=animal_id, number=1, calving_date=(day - timedelta(days=120 + i % 90)).isoformat(), daily_kg=28.0 + (i % 9) * 0.5))
+        lactations.append(_record(request, "lactation", str(i), animal_id=animal_id, number=1, calving_date=(day - timedelta(days=120 + i % 90)).isoformat(), daily_kg=daily_kg))
+        for offset in range(30):
+            timestamp = simulation - timedelta(days=29 - offset)
+            production_kg = round(daily_kg + ((request.seed + i * 11 + offset * 7) % 11 - 5) * 0.2, 2)
+            scc = 110000 + ((request.seed + i * 7919 + offset * 3571) % 90000)
+            if request.scenario == "health_alert" and i == 0 and offset >= 23:
+                scc += 260000
+            if request.scenario == "degraded_quality" and offset >= 23:
+                production_kg = round(production_kg * 0.72, 2)
+                scc += 220000
+            milk_readings.append(_record(
+                request,
+                "milk_reading",
+                f"{i}:{timestamp.isoformat()}",
+                timestamp=timestamp.isoformat(),
+                robot_id=machinery[0]["id"],
+                animal_id=animal_id,
+                lactation_id=lactation_id,
+                production_kg=production_kg,
+                scc=scc,
+            ))
     shifts = []
     for offset in range(30):
         shift_day = day - timedelta(days=29 - offset)
@@ -117,8 +140,8 @@ def generate_dataset(request: GenerationRequest = GenerationRequest()) -> dict[s
             "assumptions": ["identidades ficticias", "distribuciones ilustrativas", "sin claims productivos ni validación científica"],
         },
         "zones": zones, "employees": employees, "machinery": machinery, "animals": animals,
-        "lactations": lactations, "shifts": shifts, "tasks": tasks, "incidents": incidents,
-        "alerts": alerts, "weather": weather, "predictions": predictions,
+        "lactations": lactations, "milk_readings": milk_readings, "shifts": shifts, "tasks": tasks,
+        "incidents": incidents, "alerts": alerts, "weather": weather, "predictions": predictions,
     }
     if request.scenario == "incomplete_data":
         dataset["animals"][0]["zone_id"] = None
@@ -146,7 +169,9 @@ def quality_report(dataset: dict[str, Any]) -> dict[str, Any]:
                 errors.append(f"{kind} missing synthetic provenance")
     zone_ids = {row["id"] for row in dataset.get("zones", [])}
     employee_ids = {row["id"] for row in dataset.get("employees", [])}
+    machinery_ids = {row["id"] for row in dataset.get("machinery", [])}
     animal_ids = {row["id"] for row in dataset.get("animals", [])}
+    lactation_ids = {row["id"] for row in dataset.get("lactations", [])}
     for row in dataset.get("animals", []):
         if row.get("zone_id") is None:
             errors.append("animal missing required zone")
@@ -162,6 +187,17 @@ def quality_report(dataset: dict[str, Any]) -> dict[str, Any]:
             errors.append("lactation references unknown animal")
         if not 0 <= row.get("daily_kg", -1) <= 100:
             errors.append("lactation daily_kg outside range")
+    for row in dataset.get("milk_readings", []):
+        if row.get("animal_id") not in animal_ids:
+            errors.append("milk reading references unknown animal")
+        if row.get("lactation_id") not in lactation_ids:
+            errors.append("milk reading references unknown lactation")
+        if row.get("robot_id") not in machinery_ids:
+            errors.append("milk reading references unknown machinery")
+        if not 0 <= row.get("production_kg", -1) <= 100:
+            errors.append("milk reading production_kg outside range")
+        if not 0 <= row.get("scc", -1) <= 1000000:
+            errors.append("milk reading scc outside range")
     for row in dataset.get("alerts", []):
         if row.get("animal_id") not in animal_ids:
             errors.append("alert references unknown animal")

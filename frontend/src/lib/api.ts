@@ -8,6 +8,7 @@ import type {
   AlertsResponse,
   Animal,
   AnimalPrediction,
+  AnimalReadingsResponse,
   AuditLogResponse,
   AuthResponse,
   BoxRecria,
@@ -387,6 +388,10 @@ export const api = {
 
   qualitySummary() {
     return request<QualitySummary>("/lactations/quality/summary");
+  },
+
+  animalReadings(animalId: string, params?: QueryParams) {
+    return request<AnimalReadingsResponse>(`/animals/${animalId}/readings`, {}, params);
   },
 
   predictions(animalId: string, params?: QueryParams) {
