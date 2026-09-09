@@ -59,6 +59,10 @@ services:
       backend:
         condition: service_healthy
     command: python scripts/run_synthetic_scheduler.py --interval-seconds ${SYNTHETIC_INTERVAL_SECONDS:-3600} --profile ${SYNTHETIC_PROFILE:-small} --scenario ${SYNTHETIC_SCENARIO:-normal}
+    # El scheduler es un proceso worker y no expone HTTP; no heredar el
+    # HEALTHCHECK del Dockerfile del backend, que lo marcaría unhealthy.
+    healthcheck:
+      disable: true
 
   frontend:
     build:
