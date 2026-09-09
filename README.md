@@ -66,6 +66,33 @@ Contexto academico
 Este proyecto forma parte del Master en Bioinformatica y Bioestadistica de la UOC y la Universidad de Barcelona, dentro del area de desarrollo de programas y aplicaciones.
 
 El trabajo combina revision bibliografica, analisis de requisitos en una explotacion real, diseno de una arquitectura de datos, desarrollo de un prototipo funcional, modelos predictivos y una interfaz DSS orientada a la toma de decisiones en ganaderia lechera.
+
+## Estado técnico de Release 1
+
+Release 1 es una demo reproducible y autocontenida. Los datos de la demo son
+sintéticos y se identifican con provenance `synthetic/generated`; no representan
+datos de una explotación, no constituyen validación científica y no deben
+interpretarse como un sistema listo para producción.
+
+La entrega incluye:
+
+- API REST versionada bajo `/api/v1`, documentación OpenAPI y autenticación por
+  cookies HttpOnly.
+- Generador determinista por `profile`, `scenario` y `seed`, con controles de
+  calidad y recuperación lógica por `generator_version + seed + scenario`.
+- Escenarios operativos sintéticos, incluyendo tareas demoradas, maquinaria
+  crítica, alertas sanitarias, calidad degradada, conectividad degradada y datos
+  incompletos.
+- LeanFarming para tareas, incidencias, pedidos, turnos mañana/tarde y vistas
+  de zona; la pantalla TV es de solo lectura.
+- Scheduler sintético idempotente, ejecutable una vez o con intervalo, sin
+  Redis, Celery, proveedores externos ni modelos ML.
+- Compose con PostgreSQL, backend, frontend, scheduler y proxy, además de
+  pruebas backend, contratos/OpenAPI, frontend y flujos E2E/accesibilidad.
+
+La guía de arranque, reset, generación y reconstrucción está en
+[`OPERATIONS.md`](OPERATIONS.md). El alcance, los límites y la matriz de
+verificación de la entrega están en [`docs/RELEASE1.md`](docs/RELEASE1.md).
 2.4.	Selección tecnológica y diseño de la arquitectura
 La selección del stack tecnológico se fundamentó en criterios de madurez, comunidad, ecosistema de bibliotecas y adecuación a los requisitos del proyecto. Para el backend se eligió Python con el framework FastAPI, por su soporte nativo de programación asíncrona (ASGI), generación automática de documentación OpenAPI/Swagger y validación de datos integrada mediante Pydantic. Para la base de datos se seleccionó PostgreSQL, por su robustez, soporte de tipos JSONB para datos semi-estructurados y amplia comunidad. Para el frontend se eligió Next.js con React, junto con Zustand para la gestión de estado y TanStack Query para la comunicación con la API. El diseño visual se implementó con TailwindCSS.
 

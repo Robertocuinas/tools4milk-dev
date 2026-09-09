@@ -9,5 +9,5 @@ python scripts/apply_migrations.py
 ```
 
 The app still creates missing tables on startup for local development, but
-production should apply these migrations against Postgres before starting the
-API container.
+- production-like validation should apply these migrations against Postgres before starting the
+  API container.

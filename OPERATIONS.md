@@ -32,7 +32,7 @@ EOF
 
 # 3. Levantar el stack limpio
 #    - Postgres espera a estar healthy
-#    - Backend aplica migraciones (0000..0009) y, solo con configuración demo, siembra usuarios
+#    - Backend aplica migraciones (0000..0011) y, solo con configuración demo, siembra usuarios
 #    - Frontend espera al backend
 #    - Nginx enruta solo cuando frontend Y backend están healthy
 docker compose up -d --build
@@ -106,9 +106,9 @@ como artefacto para revisar el tooling.
 La remediación P0 actualiza Next.js a `16.3.4` (corrige los advisories de Next.js,
 incluidos `GHSA-p293-qw3h-jr36` y `GHSA-2xp9-vwfh-vxw4`) y PostCSS a `8.5.28`
 (corrige `GHSA-fxqj-rqcc-2cmp` y `GHSA-r28c-9q8g-f849`). El audit de producción
-queda sin findings `high`/`critical`; permanece un finding moderado de
-`baseline-browser-mapping` (`GHSA-w5vr-8v7q-w6rv`) transitivo de Next.js y
-Browserslist, sin impacto de ejecución de la aplicación.
+queda sin findings: la integración fija `baseline-browser-mapping` en `2.11.21`
+mediante `overrides`, corrigiendo el advisory transitivo
+`GHSA-w5vr-8v7q-w6rv` de Next.js/Browserslist.
 
 El audit completo puede seguir mostrando findings de desarrollo: `brace-expansion`
 (`GHSA-3jxr-9vmj-r5cp`, `GHSA-mh99-v99m-4gvg`, `GHSA-rgw5-rvv9-x895`) llega por
@@ -322,8 +322,7 @@ docker compose up -d --build      # rebuild + reinicio
 docker compose exec backend python scripts/apply_migrations.py
 ```
 
-Las migraciones nuevas (R5 = `0008_datos_metereologicos.sql`,
-R12 = `0009_refresh_tokens.sql`, etc.) se aplican automáticamente
+Las migraciones nuevas (hasta `0011_synthetic_scheduler.sql`) se aplican automáticamente
 si el entrypoint de docker-compose lo invoca. Si no, ejecútalo a
 mano tras cada `git pull`.
 
@@ -347,8 +346,8 @@ git. Los prefijos siguen la convención:
   la página `frontend/src/app/(app)/audit-log/page.tsx` ya están
   implementados (filtros, KPIs, expand row, AccessDenied).
 - **R14 / R20 / Tests E2E con Playwright** — la cobertura actual
-  (64 tests pytest, 0 lint errors, 0 tsc errors) cubre la lógica
-  de negocio. Un E2E con browser real añadiría confianza marginal
+  (la suite actual de pytest, 0 lint errors, 0 tsc errors) cubre la lógica
+  de negocio. Un E2E con browser real añade confianza complementaria
   en regresiones visuales a costa de: descargar Chromium en CI
   (~150 MB), orquestar `uvicorn` + `next dev`, esperar el arranque.
   No implementado — añadir solo si se detectan regresiones de UI
