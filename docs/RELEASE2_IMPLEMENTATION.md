@@ -1,4 +1,4 @@
-# Release 2: modo degradado sintético implementado
+# Release 2: modo degradado sintético (READY, certificado)
 
 ## Alcance
 
@@ -24,10 +24,13 @@ La recuperación canónica del dataset sigue siendo `generator_version + scenari
 
 ## Verificación local
 
-- Backend: `python -m pytest tests/ -q` → 113 passed, 2 warnings Starlette preexistentes.
+- Backend: `python -m pytest tests/ -q` → 114 passed, 2 warnings Starlette preexistentes.
 - Frontend: `npm run lint` → pass.
 - Frontend: `npm run typecheck` → pass.
 - Frontend: `npm run build` → pass.
+- Playwright: 3 specs (`release2-contract` con axe,
+  `release2-full-matrix-cert`, `release2-offline-cert-independent`).
 - `git diff --check` → pass.
 
-La evidencia PostgreSQL live y E2E de navegador real requiere el daemon/entorno correspondiente; los tests actuales validan la ruta FastAPI con SQLite y el contrato de frontend mediante build/typecheck.
+Estado: **READY** (certificado en Release 2; evidencia PostgreSQL live
+y matriz completa en `docs/RELEASE2_RESILIENCE_CONTRACT.md`).

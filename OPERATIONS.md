@@ -10,41 +10,45 @@ y se centra en **cómo correrla en otro servidor sin sorpresas**.
 
 ### Requisitos
 
-- **Docker Desktop** instalado y corriendo (la app usa `docker compose`,
-  no `docker-compose` v1).
-- Al menos 4 GB de RAM libres (Postgres + backend + frontend + nginx).
+- **Python 3.12+** y **Docker Desktop** instalado y corriendo (la app usa
+  `docker compose`, no `docker-compose` v1).
+- Al menos 4 GB de RAM libres (Postgres + backend + scheduler + frontend + nginx).
 - Puertos `80`, `3000`, `5432`, `8000` libres en el host.
 
-### Pasos
+### Pasos (quickstart único, 5 minutos)
 
 ```bash
 # 1. Clonar
 git clone https://github.com/Robertocuinas/tools4milk-dev.git
 cd tools4milk-dev
 
-# 2. Configurar el entorno demo (explícito y solo local)
-cat > .env <<'EOF'
-ENVIRONMENT=development
-SECRET_KEY=$(openssl rand -base64 48)   # ⚠ cambia esto en producción
-INITIAL_DEMO_PASSWORD=testpass123      # déjalo vacío en producción
-AEMET_API_KEY=                          # opcional: tu API key de AEMET OpenData
-EOF
+# 2. Configurar el entorno demo (portable: solo biblioteca estándar,
+#    sin OpenSSL/Bash/PowerShell; genera secretos aleatorios en `.env`
+#    local, idempotente, nunca imprime valores)
+python scripts/demo.py init
 
-# 3. Levantar el stack limpio
+# 3. Levantar el stack limpio en el proyecto aislado `tfm_r3_demo`
 #    - Postgres espera a estar healthy
-#    - Backend aplica migraciones (0000..0011) y, solo con configuración demo, siembra usuarios
+#    - Backend aplica migraciones (0000..0012) y, solo con configuración demo, siembra usuarios
+#    - Scheduler materializa recurrencias sintéticas cada hora
 #    - Frontend espera al backend
 #    - Nginx enruta solo cuando frontend Y backend están healthy
-docker compose up -d --build
+python scripts/demo.py up
 
 # 4. Verificar que todo está en pie
-docker compose ps
-# Todos los servicios deben estar en estado "healthy" o "running".
+python scripts/demo.py status
+# El backend debe responder /health con {"status": "ok"}.
 
-docker compose logs -f backend | head -30
-# Debe terminar con "Application startup complete" y un "Uvicorn running on
-# http://0.0.0.0:8000".
+# 5. Smoke reproducible (health, login demo, endpoint autenticado,
+#    estado del scheduler y reset sintético; cookies solo en memoria,
+#    sin archivos residuales)
+python scripts/demo.py smoke
 ```
+
+> Alternativa manual sin la CLI: copia `.env.example` a `.env`, genera
+> `SECRET_KEY` con `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+> y levanta con `docker compose -p tfm_r3_demo up -d --build`. En producción
+> deja `INITIAL_DEMO_PASSWORD` vacía (el backend rechaza arrancar si tiene valor).
 
 ### Scheduler sintético y recurrencias
 
@@ -74,20 +78,33 @@ Variables opcionales: `SYNTHETIC_INTERVAL_SECONDS` (>=1),
 `SYNTHETIC_PROFILE` (`small`, `demo`, `load`) y `SYNTHETIC_SCENARIO`.
 Los endpoints de operación sintética están deshabilitados en producción.
 
-### URLs por defecto
+### URLs y matriz de puertos (base + overrides)
 
-- **Frontend (Nginx)**: http://localhost
-- **Backend FastAPI**: http://localhost:8000
+Base (`docker-compose.yml`, proyecto `tfm_r3_demo`):
+
+- **Frontend (Nginx)**: http://localhost (`127.0.0.1:80`)
+- **Backend FastAPI**: http://localhost:8000 (`127.0.0.1:8000:8000`)
 - **Swagger UI**: http://localhost:8000/docs
+- **Frontend directo**: http://localhost:3000 (`127.0.0.1:3000:3000`)
 - **Postgres**: `localhost:5432` (interno a la red Docker como `db:5432`)
+
+Overrides históricos (otras tarjetas/stacks; no usar para la demo R3):
+
+| Fichero | Proyecto | Nginx | Backend | Frontend dir. | Postgres |
+|---|---|---|---|---|---|
+| `docker-compose.yml` (base) | `tfm_r3_demo` | `127.0.0.1:80` | `127.0.0.1:8000` | `127.0.0.1:3000` | `127.0.0.1:5432` |
+| `docker-compose.task.yml` | `tfm_ca0_*` | `127.0.0.1:18082` | `127.0.0.1:18042` | `127.0.0.1:13042` | `127.0.0.1:15442` |
+| `docker-compose.verification.yml` | `tfm_release1` | `127.0.0.1:18080` | `127.0.0.1:18000` | `127.0.0.1:13000` | `127.0.0.1:15432` |
 
 ### Resetear todo a cero (BD limpia)
 
-Si quieres empezar desde una BD vacía:
+`python scripts/demo.py reset --yes` resetea SOLO filas sintéticas
+(`provenance synthetic/generated`) sin destruir el esquema. Para una BD
+limpia desde cero (solo proyecto propio):
 
 ```bash
-docker compose down -v     # ⚠ BORRA todos los datos
-docker compose up -d --build
+python scripts/demo.py down --volumes --yes  # ⚠ BORRA los datos demo de tfm_r3_demo
+python scripts/demo.py up
 ```
 
 El `-v` borra el volumen `postgres_data`. La próxima vez que arranque,
@@ -173,7 +190,7 @@ Las mínimas para producción:
 | Variable | Ejemplo | Notas |
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://t4m:***@db:5432/tools4milk` | Cadena SQLAlchemy. **Cambiar de SQLite en prod.** |
-| `SECRET_KEY` | `openssl rand -base64 48` | **Crítico.** Mínimo 32 chars. Si cambia, todos los tokens emitidos quedan invalidados. |
+| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` | **Crítico.** Mínimo 32 chars. Si cambia, todos los tokens emitidos quedan invalidados. |
 | `ENVIRONMENT` | `production` | Activa validaciones duras en startup + HSTS + cookie `Secure`. |
 | `CORS_ORIGINS` | `https://granja.example.com` | Lista separada por comas. **Nunca** dejar `*` en prod. |
 | `AEMET_API_KEY` | (opcional) | API key de AEMET OpenData. Si falta, el módulo `weather` usa datos sintéticos. |
@@ -183,9 +200,9 @@ Las mínimas para producción:
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | TTL del refresh token. |
 | `REFRESH_TOKEN_MAX_PER_USER` | `5` | Máximo de refresh activos por usuario. |
 
-> **Genera `SECRET_KEY` con `openssl rand -base64 48` (48 bytes
-> base64-encoded ≈ 64 chars). Cualquier valor por debajo de 32 chars
-> hará que el servidor rechace arrancar en producción.**
+> **Genera `SECRET_KEY` con `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+> (48 bytes aleatorios ≈ 64 chars, portable sin OpenSSL). Cualquier valor
+> por debajo de 32 chars hará que el servidor rechace arrancar en producción.**
 
 ---
 
@@ -267,11 +284,11 @@ seed; no reutilices las credenciales demo.
 La base de datos es la única pieza con estado. Recomendado:
 
 ```bash
-# Backup diario completo
-docker compose exec -T db pg_dump -U t4m tools4milk | gzip > /backups/tools4milk-$(date +%F).sql.gz
+# Backup diario completo (usuario real de Compose: postgres)
+docker compose -p tfm_r3_demo exec -T db pg_dump -U postgres tools4milk | gzip > /backups/tools4milk-$(date +%F).sql.gz
 
 # Restaurar
-gunzip -c /backups/tools4milk-XXXX-XX-XX.sql.gz | docker compose exec -T db psql -U t4m -d tools4milk
+gunzip -c /backups/tools4milk-XXXX-XX-XX.sql.gz | docker compose -p tfm_r3_demo exec -T db psql -U postgres -d tools4milk
 ```
 
 Los JWT (access + refresh) emitidos antes del restore dejarán de ser
@@ -290,7 +307,7 @@ rotar `SECRET_KEY` tras un restore para forzar re-login.
 **"SECRET_KEY must be changed before running in production".**
 - El servidor arrancó con `ENVIRONMENT=production` y la SECRET_KEY
   por defecto o demasiado corta. Genera una nueva con
-  `openssl rand -base64 48`.
+  `python scripts/demo.py init --force` (o `secrets.token_urlsafe(48)`).
 
 **"CORS_ORIGINS must be explicit before running in production".**
 - `CORS_ORIGINS=*` o no definida. Pon los orígenes exactos separados
@@ -322,7 +339,7 @@ docker compose up -d --build      # rebuild + reinicio
 docker compose exec backend python scripts/apply_migrations.py
 ```
 
-Las migraciones nuevas (hasta `0011_synthetic_scheduler.sql`) se aplican automáticamente
+Las migraciones nuevas (hasta `0012_release2_resilience.sql`) se aplican automáticamente
 si el entrypoint de docker-compose lo invoca. Si no, ejecútalo a
 mano tras cada `git pull`.
 
@@ -345,13 +362,11 @@ git. Los prefijos siguen la convención:
 - **R13 / UI de audit log** — el endpoint `GET /api/v1/audit-log` y
   la página `frontend/src/app/(app)/audit-log/page.tsx` ya están
   implementados (filtros, KPIs, expand row, AccessDenied).
-- **R14 / R20 / Tests E2E con Playwright** — la cobertura actual
-  (la suite actual de pytest, 0 lint errors, 0 tsc errors) cubre la lógica
-  de negocio. Un E2E con browser real añade confianza complementaria
-  en regresiones visuales a costa de: descargar Chromium en CI
-  (~150 MB), orquestar `uvicorn` + `next dev`, esperar el arranque.
-  No implementado — añadir solo si se detectan regresiones de UI
-  no cubiertas por unit tests.
+- **R14 / R20 / Tests E2E con Playwright** — IMPLEMENTADO en Release 2:
+  3 specs Playwright (`release2-contract` con comprobaciones axe,
+  `release2-full-matrix-cert`, `release2-offline-cert-independent`),
+  sobre la suite pytest (114 tests), 0 lint errors y 0 tsc errors.
+  El job CI de portabilidad queda para la siguiente tarjeta R3.
 - **Doble-llave para rotación de SECRET_KEY sin logout forzado** —
   solo si el sistema pasa a producción con usuarios activos y se
   necesita rotación de secreto sin interrupciones.
@@ -360,7 +375,9 @@ git. Los prefijos siguen la convención:
 
 El navegador del usuario lleva DOS cookies HttpOnly tras el login:
 
-- `t4m_token` — access token de 60 min. Se adjunta en cada fetch.
+- `t4m_token` — access token de 8 h (TTL canónico, `AUTH_COOKIE_MAX_AGE_SECONDS`
+  en `backend/app/security.py`; la demo fija `ACCESS_TOKEN_EXPIRE_MINUTES=480`
+  en `.env`). Se adjunta en cada fetch.
 - `t4m_refresh` — refresh token de 30 días. Se adjunta en cada fetch.
   Lleva `SameSite=Strict` (R22) para máxima protección CSRF.
 
@@ -373,8 +390,8 @@ Hay dos mecanismos que mantienen la sesión viva sin que el usuario
 tenga que hacer nada:
 
 1. **Proactivo** — `<SessionKeeper />` (en `app/(app)/layout.tsx`)
-   llama a `POST /auth/refresh` cada **50 minutos** (10 min antes de
-   que el access caduque a los 60). El usuario nunca nota el corte.
+   llama a `POST /auth/refresh` cada **50 minutos**, muy por dentro
+   de la ventana de 8 h. El usuario nunca nota el corte.
 
 2. **Reactivo** — el `request()` de `lib/api.ts` intercepta un 401
    y, salvo en endpoints de auth, llama una vez a `POST /auth/refresh`
