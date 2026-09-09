@@ -163,7 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             return (
               <div key={group.label} className="mb-4">
                 {group.label && (
-                  <p className="mb-1 hidden px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#4a7058] md:block">
+                  <p className="mb-1 hidden px-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#79a88b] md:block">
                     {group.label}
                   </p>
                 )}
@@ -173,6 +173,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={href}
                       href={href}
+                      aria-label={label}
                       aria-current={active ? "page" : undefined}
                       className={`flex items-center justify-center gap-2.5 rounded-[10px] px-3 py-3 text-sm font-semibold transition-colors md:justify-start md:py-2.5 ${
                         active
@@ -181,7 +182,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       <Icon
-                        className={`h-4 w-4 shrink-0 ${active ? "text-[#35e479]" : "text-[#4a7058]"}`}
+                        className={`h-4 w-4 shrink-0 ${active ? "text-[#35e479]" : "text-[#79a88b]"}`}
                         strokeWidth={2}
                       />
                       <span className="hidden md:inline">{label}</span>
@@ -204,11 +205,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             {activeWorker && (
               <div className="mt-1 hidden items-center gap-1 md:flex">
-                <span className="text-[9px] text-[#4a7058]">▸</span>
+                <span className="text-[9px] text-[#79a88b]">▸</span>
                 <span className="truncate text-[10px] font-semibold text-[#7fa18d]">
                   {activeWorker.name}
                 </span>
-                <span className="shrink-0 rounded bg-[#1e3a26] px-1 text-[9px] text-[#4a7058]">local</span>
+                <span className="shrink-0 rounded bg-[#1e3a26] px-1 text-[9px] text-[#79a88b]">local</span>
               </div>
             )}
           </Link>

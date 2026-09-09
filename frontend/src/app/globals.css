@@ -29,7 +29,8 @@
 
   /* ── Semantic state colors ── */
   --color-state-critica:  #dc2626;
-  --color-state-atencion: #d97706;
+  /* Dark enough to remain readable over the tinted warning surface. */
+  --color-state-atencion: #a65300;
   --color-state-ok:       #16a34a;
   --color-state-info:     #2563eb;
   --color-state-neutral:  #64748b;
