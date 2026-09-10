@@ -50,3 +50,49 @@ El panel permite elegir animal y alternar entre producción diaria y células
 somáticas. Incluye estados accesibles de carga, error con reintento y `Sin datos
 suficientes`. El selector y el gráfico son responsive; la provenance y la
 limitación descriptiva permanecen visibles.
+
+## Alcance R4-3
+
+La pantalla `Predicciones` expone los cuatro recorridos DSS con etiquetas
+honestas: tres vistas granulares sobre los endpoints existentes
+(`/predictions/production/{id}`, `/predictions/composition/{id}`,
+`/predictions/health-risk/{id}`) más la vista compuesta (`/predictions/{id}`),
+y una pestaña de asociación meteorológica
+(`GET /api/v1/weather/correlation/impact`). Las heurísticas conservan el
+banner experimental («heurística aritmética, no ML»); la composición sigue
+siendo un placeholder (0 → «n/d») declarado en la UI.
+
+## Contrato API (R4-3)
+
+`GET /api/v1/weather/correlation/impact`
+
+- Requiere autenticación y la política de lectura existente (`admin`,
+  `veterinario`, `operario` o `alimentacion`); sin ampliar privilegios.
+  `POST /weather/sync` continúa solo `admin`.
+- `dias_adelante` (1–30, por defecto 7) se conserva por compatibilidad como
+  horizonte orientativo: no se predicen impactos. `ventana_dias` (1–90, por
+  defecto 30) acota la ventana retrospectiva del análisis.
+- Estadística exclusivamente descriptiva y determinista sobre observaciones
+  sintéticas existentes: medias diarias emparejadas por fecha natural de
+  `lecturas_meteorologia` (temperatura, humedad) y `lecturas_robot_ordeno`
+  (producción). Sin AEMET obligatorio, sin proveedores externos, sin tablas
+  nuevas.
+- Método `pearson_descriptivo`, fórmula
+  `r = Σ((x - mx)(y - my)) / sqrt(Σ(x - mx)² · Σ(y - my)²)`, con `n` = días
+  naturales emparejados. Umbral mínimo `min_sample_size = 5`; por debajo se
+  devuelve `status = "insufficient_data"` con `asociaciones = []`. Nunca se
+  inventan resultados.
+- La clave legacy `impactos_predichos` se conserva vacía para compatibilidad.
+- Cada respuesta incluye el aviso visible
+  «Asociación descriptiva sobre datos sintéticos; no implica causalidad ni
+  validez predictiva, clínica o productiva» y provenance canónica
+  (`generated`/`aemet_real`, modo `synthetic`/`real`).
+- RBAC de predicciones sin cambios: `admin`, `veterinario` y `alimentacion`
+  (200); `operario` recibe 403 con «No tienes permisos para realizar esta
+  accion».
+
+El snapshot ejecutable de OpenAPI se valida en
+`backend/tests/test_openapi_docs.py` (`operationId = weather_correlation_impact`,
+ejemplos sufficient/insufficient, parámetros acotados). Los recorridos de UI se
+cubren en `frontend/playwright/release4-correlation.spec.ts` con datos
+sintéticos mocados.

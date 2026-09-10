@@ -64,3 +64,31 @@ def test_openapi_expone_serie_temporal_por_animal():
     assert {"animal_id", "provenance", "count", "days", "limit", "readings"} <= set(
         response_schema["required"]
     )
+
+
+def test_openapi_expone_correlacion_meteo_descriptiva():
+    """Release 4 DSS R4-3: GET /weather/correlation/impact documentado y protegido."""
+    with TestClient(app) as client:
+        schema = client.get("/openapi.json").json()
+
+    path = schema["paths"]["/api/v1/weather/correlation/impact"]["get"]
+    assert path["operationId"] == "weather_correlation_impact"
+    assert "422" in path["responses"]
+    assert "examples" in path["responses"]["200"]["content"]["application/json"]
+    params = {p["name"] for p in path.get("parameters", [])}
+    assert {"dias_adelante", "ventana_dias"} <= params
+    assert path["security"] == [{"HTTPBearer": []}]
+    assert path["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/WeatherCorrelationResponse"
+    }
+    response_schema = schema["components"]["schemas"]["WeatherCorrelationResponse"]
+    assert {
+        "ubicacion",
+        "metodo",
+        "status",
+        "sample_size",
+        "min_sample_size",
+        "asociaciones",
+        "aviso",
+        "provenance",
+    } <= set(response_schema["required"])

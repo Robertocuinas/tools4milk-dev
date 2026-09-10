@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.contracts import canonical_source, provenance
 from app.models.tools4milk import LecturaMeteo
-from app.routers.deps import AdminOnly, WeatherReader
+from app.routers.deps import AdminOnly, DbSession, WeatherReader
+from app.schemas.api import WeatherCorrelationResponse
 from app.security import get_current_user
+from app.services import weather_correlation_service
 from app.services.aemet_client import aemet_client
 
 router = APIRouter(
@@ -143,13 +145,80 @@ async def weather_sync(db: Annotated[Session, Depends(get_db)], _user: AdminOnly
     return await aemet_client.sincronizar_datos(db)
 
 
-@router.get("/correlation/impact")
+@router.get(
+    "/correlation/impact",
+    operation_id="weather_correlation_impact",
+    response_model=WeatherCorrelationResponse,
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "sufficient": {
+                            "value": {
+                                "ubicacion": "Villalba, Lugo",
+                                "dias_adelante": 7,
+                                "ventana_dias": 30,
+                                "metodo": "pearson_descriptivo",
+                                "formula": "r = Σ((x - mx)(y - my)) / sqrt(Σ(x - mx)² · Σ(y - my)²)",
+                                "status": "sufficient",
+                                "sample_size": 12,
+                                "min_sample_size": 5,
+                                "asociaciones": [
+                                    {
+                                        "variable_meteo": "temperatura_c_media_diaria",
+                                        "variable_productiva": "produccion_kg_media_diaria",
+                                        "n": 12,
+                                        "pearson_r": 0.42,
+                                        "media_meteo": 18.5,
+                                        "media_productiva": 29.1,
+                                        "interpretacion": "n=12: co-variación lineal observada moderada y positiva (r=0.42)",
+                                    }
+                                ],
+                                "impactos_predichos": [],
+                                "aviso": "Asociación descriptiva sobre datos sintéticos; no implica causalidad ni validez predictiva, clínica o productiva",
+                                "provenance": {"source": "generated", "mode": "synthetic", "synthetic": True},
+                            }
+                        },
+                        "insufficient": {
+                            "value": {
+                                "ubicacion": "Villalba, Lugo",
+                                "dias_adelante": 7,
+                                "ventana_dias": 30,
+                                "metodo": "pearson_descriptivo",
+                                "status": "insufficient_data",
+                                "sample_size": 0,
+                                "min_sample_size": 5,
+                                "asociaciones": [],
+                                "impactos_predichos": [],
+                                "aviso": "Asociación descriptiva sobre datos sintéticos; no implica causalidad ni validez predictiva, clínica o productiva",
+                                "provenance": {"source": "generated", "mode": "synthetic", "synthetic": True},
+                            }
+                        },
+                    }
+                }
+            }
+        },
+        422: {"description": "Parametros invalidos"},
+        500: {"description": "Error interno"},
+    },
+)
 def weather_impact(
+    db: DbSession,
     _user: WeatherReader,
     dias_adelante: Annotated[int, Query(ge=1, le=30)] = 7,
-) -> dict[str, Any]:
-    return {
-        "ubicacion": "Villalba, Lugo",
-        "dias_adelante": dias_adelante,
-        "impactos_predichos": [],
-    }
+    ventana_dias: Annotated[int, Query(ge=1, le=90)] = 30,
+) -> WeatherCorrelationResponse:
+    """Asociación descriptiva meteo ↔ producción sobre datos sintéticos.
+
+    Estadística descriptiva determinista (Pearson sobre medias diarias
+    emparejadas). ``dias_adelante`` se conserva por compatibilidad como
+    horizonte orientativo: no se predicen impactos. Con menos de 5 días
+    emparejados devuelve ``status="insufficient_data"`` sin inventar
+    resultados.
+    """
+    return WeatherCorrelationResponse(
+        **weather_correlation_service.compute_correlation(
+            db, ventana_dias=ventana_dias, dias_adelante=dias_adelante
+        )
+    )

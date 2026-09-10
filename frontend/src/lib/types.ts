@@ -56,6 +56,13 @@ export type Alert = {
   notas_operario?: string | null;
   accion_tomada?: string | null;
   veterinario_responsable?: string | null;
+  version: number;
+};
+
+export type AlertMutationResponse = {
+  operation_id: string;
+  replayed: boolean;
+  alert: Alert;
 };
 
 export type AlertsResponse = {
@@ -491,6 +498,31 @@ export type WeatherForecast = {
   is_forecast?: boolean;
 };
 
+export type WeatherCorrelationAssociation = {
+  variable_meteo: string;
+  variable_productiva: string;
+  n: number;
+  pearson_r: number | null;
+  media_meteo: number | null;
+  media_productiva: number | null;
+  interpretacion: string;
+};
+
+export type WeatherCorrelation = {
+  ubicacion: string;
+  dias_adelante: number;
+  ventana_dias: number;
+  metodo: string;
+  formula: string;
+  status: "sufficient" | "insufficient_data";
+  sample_size: number;
+  min_sample_size: number;
+  asociaciones: WeatherCorrelationAssociation[];
+  impactos_predichos: unknown[];
+  aviso: string;
+  provenance: Provenance;
+};
+
 export type ApiErrorPayload = {
   detail?: string | { msg?: string }[];
   status_code?: number;
@@ -523,4 +555,5 @@ export type UnifiedIncident = {
   reportado_por?: string | null;
   recomendacion?: string | null;
   alertaEstado?: AlertState;
+  alertVersion?: number;
 };

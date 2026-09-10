@@ -52,6 +52,13 @@ class AlertCreate(BaseModel):
 class AlertUpdate(BaseModel):
     estado: Literal["pendiente", "revisada", "resuelta", "falsa_alarma"] | None = None
     notas_operario: str | None = None
+    expected_version: int = Field(..., gt=0)
+
+
+class AlertMutationResponse(BaseModel):
+    operation_id: str
+    replayed: bool
+    alert: dict[str, Any]
 
 
 class AlertsResponse(BaseModel):
@@ -86,3 +93,33 @@ class AnimalReadingsResponse(BaseModel):
     days: int = Field(ge=1, le=90)
     limit: int = Field(ge=1, le=180)
     readings: list[AnimalReadingResponse]
+
+
+class WeatherCorrelationAssociation(BaseModel):
+    """Asociación descriptiva entre una variable meteo y una productiva."""
+
+    variable_meteo: str
+    variable_productiva: str
+    n: int = Field(ge=0)
+    pearson_r: float | None = None
+    media_meteo: float | None = None
+    media_productiva: float | None = None
+    interpretacion: str
+
+
+class WeatherCorrelationResponse(BaseModel):
+    """Contrato tipado de GET /weather/correlation/impact (Release 4 DSS)."""
+
+    ubicacion: str
+    dias_adelante: int = Field(ge=1, le=30)
+    ventana_dias: int = Field(ge=1, le=90)
+    metodo: str
+    formula: str
+    status: Literal["sufficient", "insufficient_data"]
+    sample_size: int = Field(ge=0)
+    min_sample_size: int = Field(ge=1)
+    asociaciones: list[WeatherCorrelationAssociation]
+    # Clave legacy del stub: se conserva vacía para compatibilidad.
+    impactos_predichos: list[dict[str, Any]] = Field(default_factory=list)
+    aviso: str
+    provenance: ProvenanceResponse
