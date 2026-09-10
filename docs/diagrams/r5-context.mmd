@@ -1,0 +1,31 @@
+%% TOOLS4MILK R5 — Vista de contexto (R5-RF-02).
+%% Sistema efectivamente implementado. Todo dato interno es synthetic/generated.
+%% Fuentes: README.md (lineas ~128-131), docs/RELEASE3.md, docs/RELEASE1.md,
+%%          scripts/demo.py, backend/app/main.py, backend/app/services/aemet_client.py.
+flowchart TB
+    subgraph ACTORES["Actores (fuera del sistema)"]
+        direction TB
+        PERSONAL["Personal de granja<br/>roles: admin, veterinario,<br/>alimentacion, operario"]
+        NAV["Navegador web<br/>Next.js servido por frontend"]
+        TV["Pantalla TV por zona<br/>solo lectura"]
+        OPERADOR["Operador demo<br/>CLI scripts/demo.py"]
+    end
+
+    subgraph TFM["TOOLS4MILK (frontera del sistema)"]
+        direction TB
+        APP["Aplicacion TOOLS4MILK<br/>Next.js + FastAPI /api/v1 + PostgreSQL<br/>Compose aislado tfm_r3_demo"]
+        NOTE_SYNTH["Nota: datos exclusivamente<br/>synthetic/generated<br/>prototipo academico, no produccion"]
+    end
+
+    subgraph EXT["Externo opcional"]
+        AEMET["AEMET OpenData<br/>opt-in via AEMET_API_KEY<br/>ausencia = fallback sintetico"]
+    end
+
+    PERSONAL -- "usa via HTTPS<br/>navegador" --> NAV
+    NAV -- "usa<br/>HTTP" --> APP
+    TV -- "consulta lectura<br/>HTTP GET" --> APP
+    OPERADOR -- "opera<br/>init|up|smoke|reset|down" --> APP
+    APP -- "sincroniza opt-in<br/>POST /api/v1/weather/sync (solo admin)<br/>modo aemet_real o generated" --> AEMET
+    AEMET -- "responde<br/>prediccion o fallo" --> APP
+
+    NOTE_SYNTH -.- APP

@@ -1,0 +1,48 @@
+%% TOOLS4MILK R5 — Vista de datos sinteticos (R5-RF-02).
+%% Todo dato es synthetic/generated con provenance; sin PII ni datos reales.
+%% Fuentes: docs/SYNTHETIC_DATA.md, backend/app/synthetic_data.py,
+%%          backend/scripts/generate_synthetic.py,
+%%          backend/scripts/seed_realistic_data.py,
+%%          backend/scripts/run_synthetic_scheduler.py,
+%%          backend/app/synthetic_scheduler.py,
+%%          backend/app/routers/synthetic_scheduler.py,
+%%          backend/app/services/aemet_client.py.
+flowchart LR
+    subgraph GEN["Generacion determinista (fuera de BD)"]
+        direction TB
+        MODULO["backend/app/synthetic_data.py<br/>GENERATOR_VERSION 1.0.0<br/>SOURCE synthetic/generated"]
+        PARAMS["Parametros<br/>profile: small 8, demo 200, load 1000<br/>scenario 9 valores<br/>seed (p. ej. 20260602)<br/>UUID5 version+seed+escenario+entidad+clave"]
+        CLI["backend/scripts/generate_synthetic.py<br/>--profile --scenario --seed --check<br/>quality_report: manifiesto, provenance,<br/>unicidad, referencias, rangos"]
+    end
+
+    subgraph CARGA["Carga idempotente (solo demo)"]
+        direction TB
+        SEEDSCRIPT["backend/scripts/seed_realistic_data.py<br/>idempotente, RNG fija<br/>via POST /api/v1/admin/seed-data"]
+        SCHEDSCRIPT["backend/scripts/run_synthetic_scheduler.py<br/>--once o --interval-seconds<br/>--profile --scenario<br/>repite = solo omitidos, sin duplicar"]
+        SCHEDSRV["servicio scheduler<br/>cada SYNTHETIC_INTERVAL_SECONDS<br/>heartbeat /tmp/tools4milk-scheduler-alive"]
+    end
+
+    subgraph DATO["PostgreSQL tools4milk"]
+        direction TB
+        PG[(PostgreSQL 15<br/>filas con provenance<br/>synthetic/generated)]
+        RESET["POST /api/v1/admin/synthetic/reset<br/>borra SOLO synthetic/generated<br/>nunca destruye esquema"]
+    end
+
+    subgraph CONSUMO["Consumo honesto"]
+        direction TB
+        APIS["FastAPI /api/v1<br/>provenance en cada respuesta<br/>aviso: ilustrativo, no clinico"]
+        AEMET["AEMET opt-in<br/>POST /api/v1/weather/sync<br/>modo aemet_real o generated<br/>aemet_failure = fallback sintetico"]
+        FRONTEND["Next.js: /quality, /tasks,<br/>/incidents, /predictions, /tv<br/>etiquetas honestas + marker sintetico"]
+    end
+
+    MODULO -- "define<br/>version + perfiles + escenarios" --> PARAMS
+    PARAMS -- "produce<br/>JSON portable + provenance" --> CLI
+    CLI -- "valida<br/>codigo 1 si falla --check" --> CLI
+    CLI -- "genera dataset<br/>documento JSON" --> SEEDSCRIPT
+    SEEDSCRIPT -- "inserta<br/>SQL idempotente" --> PG
+    SCHEDSCRIPT -- "materializa<br/>recurrencias sintetica" --> PG
+    SCHEDSRV -- "ejecuta<br/>run_once periodico" --> PG
+    AEMET -- "upsert<br/>lecturas_meteorologia" --> PG
+    PG -- "sirve<br/>SELECT" --> APIS
+    APIS -- "muestra<br/>HTTP + aviso + provenance" --> FRONTEND
+    RESET -- "limpia<br/>solo provenance sintetico" --> PG
