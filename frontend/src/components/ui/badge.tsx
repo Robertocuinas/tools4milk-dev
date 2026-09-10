@@ -10,10 +10,10 @@ type BadgeProps = {
 
 const tones: Record<BadgeTone, string> = {
   neutral: "border-app-border bg-app-bg text-app-dim",
-  info: "border-state-info/30 bg-state-info/10 text-state-info",
-  success: "border-state-ok/30 bg-state-ok/10 text-state-ok",
-  warning: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion",
-  critical: "border-state-critica/30 bg-state-critica/10 text-state-critica",
+  info: "border-state-info/30 bg-state-info/10 text-state-info-ink",
+  success: "border-state-ok/30 bg-state-ok/10 text-state-ok-ink",
+  warning: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion-ink",
+  critical: "border-state-critica/30 bg-state-critica/10 text-state-critica-ink",
 };
 
 export function Badge({ children, tone = "neutral", className = "" }: BadgeProps) {

@@ -7,6 +7,8 @@ import { useMemo, useState } from "react";
 import { DonutStat, SparkArea } from "@/components/charts/MiniCharts";
 import { Pagination } from "@/components/common/Pagination";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusState } from "@/components/ui/status-state";
+import { SyntheticMarker } from "@/components/ui/synthetic-marker";
 import { api } from "@/lib/api";
 import { DEFAULT_PAGE_SIZE, getSkip } from "@/lib/pagination";
 import type { Animal, Lactation } from "@/lib/types";
@@ -14,6 +16,11 @@ import type { Animal, Lactation } from "@/lib/types";
 type MetricStatus = "ok" | "warning" | "critical";
 type MetricKey = "grasa" | "proteina" | "produccion" | "rcs";
 type IndicatorKey = "rcs" | "produccion" | "dias" | "total";
+type TrendMetric = "produccion_kg" | "scc";
+
+function isTrendMetric(value: string): value is TrendMetric {
+  return value === "produccion_kg" || value === "scc";
+}
 
 const compositionMetrics: {
   key: MetricKey;
@@ -51,9 +58,9 @@ function formatNumber(value: number | null | undefined, digits = 0) {
 }
 
 function statusClass(status: MetricStatus) {
-  if (status === "critical") return "border-state-critica/30 bg-state-critica/10 text-state-critica";
-  if (status === "warning") return "border-state-atencion/30 bg-state-atencion/10 text-state-atencion";
-  return "border-state-ok/30 bg-state-ok/10 text-state-ok";
+  if (status === "critical") return "border-state-critica/30 bg-state-critica/10 text-state-critica-ink";
+  if (status === "warning") return "border-state-atencion/30 bg-state-atencion/10 text-state-atencion-ink";
+  return "border-state-ok/30 bg-state-ok/10 text-state-ok-ink";
 }
 
 function getMetricValue(metric: MetricKey, lactation?: Lactation) {
@@ -202,7 +209,7 @@ function AnimalQualityCard({ animal, lactation }: { animal: Animal; lactation?: 
         </div>
         <div className="shrink-0 text-center">
           <div className={`flex h-14 w-14 items-center justify-center rounded-full font-heading text-xl font-bold ${
-            score >= 85 ? "bg-state-ok/15 text-state-ok" : "bg-state-atencion/15 text-state-atencion"
+            score >= 85 ? "bg-state-ok/15 text-state-ok-ink" : "bg-state-atencion/15 text-state-atencion-ink"
           }`}>
             {score || "-"}
           </div>
@@ -210,7 +217,7 @@ function AnimalQualityCard({ animal, lactation }: { animal: Animal; lactation?: 
         </div>
       </div>
       {hasWarning && (
-        <div className="flex items-center gap-2 rounded-[10px] bg-state-atencion/15 px-3 py-2 text-xs font-semibold text-state-atencion">
+        <div className="flex items-center gap-2 rounded-[10px] bg-state-atencion/15 px-3 py-2 text-xs font-semibold text-state-atencion-ink">
           <AlertTriangle className="h-3.5 w-3.5" />
           Revisar parámetros de lactación
         </div>
@@ -222,6 +229,8 @@ function AnimalQualityCard({ animal, lactation }: { animal: Animal; lactation?: 
 export default function QualityPage() {
   const [showComposition, setShowComposition] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState<string | null>(null);
+  const [trendAnimalId, setTrendAnimalId] = useState<string | null>(null);
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("produccion_kg");
   const [page, setPage] = useState(1);
   const pageSize = DEFAULT_PAGE_SIZE;
 
@@ -245,6 +254,14 @@ export default function QualityPage() {
   const allProductionAnimals = useQuery({
     queryKey: ["animals-produccion-quality-all"],
     queryFn: () => api.animals({ estado: "produccion", limit: 500 }),
+    staleTime: 60_000,
+  });
+
+  const selectedTrendAnimalId = trendAnimalId ?? allProductionAnimals.data?.[0]?.id ?? null;
+  const trendQuery = useQuery({
+    queryKey: ["quality-animal-readings", selectedTrendAnimalId],
+    queryFn: () => selectedTrendAnimalId ? api.animalReadings(selectedTrendAnimalId, { days: 30, limit: 90 }) : Promise.reject(new Error("Animal no seleccionado")),
+    enabled: selectedTrendAnimalId !== null,
     staleTime: 60_000,
   });
 
@@ -277,18 +294,22 @@ export default function QualityPage() {
   const avgQuality = scores.length > 0 ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0;
   const warningLactations = activeLactations.filter((lactation) => (lactation.rcs_promedio ?? 0) >= 250000);
   const criticalLactations = activeLactations.filter((lactation) => (lactation.rcs_promedio ?? 0) >= 400000);
-  const trend = activeLactations
-    .filter((lactation) => lactation.produccion_promedio != null)
-    .slice(0, 10)
-    .reverse()
-    .map((lactation, index) => ({
-      label: lactation.fecha_inicio?.slice(5, 10) ?? String(index + 1),
-      value: Number(lactation.produccion_promedio),
+  const trend = (trendQuery.data?.readings ?? [])
+    .filter((reading) => reading[trendMetric] != null)
+    .map((reading) => ({
+      label: (reading.fecha ?? reading.ts ?? "").slice(5, 10),
+      value: Number(reading[trendMetric]),
     }));
+  const selectedTrendAnimal = (allProductionAnimals.data ?? []).find(
+    (animal) => animal.id === selectedTrendAnimalId,
+  );
+  const trendMetricLabel = trendMetric === "produccion_kg" ? "Producción diaria" : "Células somáticas";
+  const trendMetricUnit = trendMetric === "produccion_kg" ? "kg" : "cél/mL";
 
   return (
     <div className="min-h-full">
       <PageHeader eyebrow="Leche a la carta" title="Calidad de leche" EyebrowIcon={Droplets}>
+        <SyntheticMarker />
         <span className="rounded-full border border-app-border bg-white px-3 py-1.5 text-sm font-bold text-app-text">
           {summaryQuery.data?.animales_en_control ?? activeLactations.length} animales en control
         </span>
@@ -323,23 +344,75 @@ export default function QualityPage() {
 
         {!animalsQuery.isLoading && !lactationsQuery.isLoading && list.length > 0 && (
           <div className="grid gap-4 xl:grid-cols-[1.4fr_280px]">
-            <div className="rounded-[10px] border border-app-border bg-white p-5">
-              {/* TODO: Para una tendencia temporal real se necesita un endpoint de lecturas
-                  diarias por animal (ej: GET /animals/{id}/readings o GET /lactations/{id}/readings).
-                  Por ahora se muestra la distribución de producción por lactaciones activas. */}
-              <div className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-app-dim">
-                Distribución de producción por lactaciones activas
+            <section className="rounded-[10px] border border-app-border bg-white p-5" aria-labelledby="quality-trend-title">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div id="quality-trend-title" className="text-xs font-extrabold uppercase tracking-[0.18em] text-app-dim">
+                    Tendencia temporal sintética por animal
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-app-text">
+                    {selectedTrendAnimal?.crotal_oficial ?? "Selecciona un animal"} · últimos 30 días
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-app-dim">
+                    Animal
+                    <select
+                      aria-label="Animal para la tendencia"
+                      value={selectedTrendAnimalId ?? ""}
+                      onChange={(event) => setTrendAnimalId(event.target.value)}
+                      className="mt-1 block h-10 w-full rounded-[10px] border border-app-border bg-app-bg px-3 text-sm text-app-text outline-none focus:border-brand"
+                    >
+                      {(allProductionAnimals.data ?? []).map((animal) => (
+                        <option key={animal.id} value={animal.id}>
+                          {animal.crotal_oficial}{animal.nombre ? ` · ${animal.nombre}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-app-dim">
+                    Métrica diaria
+                    <select
+                      aria-label="Métrica de la tendencia"
+                      value={trendMetric}
+                      onChange={(event) => {
+                        if (isTrendMetric(event.target.value)) setTrendMetric(event.target.value);
+                      }}
+                      className="mt-1 block h-10 w-full rounded-[10px] border border-app-border bg-app-bg px-3 text-sm text-app-text outline-none focus:border-brand"
+                    >
+                      <option value="produccion_kg">Producción (kg)</option>
+                      <option value="scc">Células somáticas (cél/mL)</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-              <div className="h-28">
-                {trend.length >= 2 ? (
+              <div className="mt-5 h-40" role="region" aria-label={`${trendMetricLabel} en ${trendMetricUnit}`}>
+                {trendQuery.isLoading ? (
+                  <StatusState kind="loading" title="Cargando tendencia" />
+                ) : trendQuery.isError ? (
+                  <StatusState
+                    kind="error"
+                    title="No se pudo cargar la tendencia"
+                    description="La serie no está disponible. Reintenta sin perder la selección."
+                    action={<button type="button" className="font-semibold text-brand hover:underline" onClick={() => trendQuery.refetch()}>Reintentar</button>}
+                  />
+                ) : trend.length >= 2 ? (
                   <SparkArea color="#35E479" data={trend} />
                 ) : (
-                  <div className="grid h-full place-items-center rounded-[10px] border border-dashed border-app-border text-sm font-semibold text-app-dim">
-                    Sin datos suficientes
-                  </div>
+                  <StatusState
+                    kind="empty"
+                    title="Sin datos suficientes"
+                    description="No hay al menos dos lecturas reales en el rango; no se inventan puntos."
+                  />
                 )}
               </div>
-            </div>
+              {trend.length >= 2 && (
+                <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-app-dim" aria-live="polite">
+                  <span>{trend.length} lecturas · orden cronológico</span>
+                  <span>Fuente: synthetic/generated · serie descriptiva, no clínica</span>
+                </div>
+              )}
+            </section>
             <div className="rounded-[10px] border border-app-border bg-white p-5">
               <DonutStat value={avgQuality} label="calidad" />
             </div>

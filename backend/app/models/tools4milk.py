@@ -335,6 +335,7 @@ class Alerta(Base):
     ts_generacion: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ts_resolucion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resuelta_por: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("empleados.id"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import { PanelCard, SectionTitle } from "@/components/ui/panel-card";
 import { api } from "@/lib/api";
 import { API_BASE_URL, API_V1_URL } from "@/lib/config";
 import { AccessDenied } from "@/components/ui/access-denied";
+import { OperationalPanel } from "@/components/operational/operational-panel";
 import { usePermissions } from "@/lib/use-permissions";
 
 // ── Module status list ────────────────────────────────────────────────────────
@@ -198,6 +199,9 @@ export default function IntegrationPage() {
             </div>
           </PanelCard>
         </div>
+
+        {/* Operaciones sintéticas (R4-4, solo admin) */}
+        <OperationalPanel />
 
         {/* Session info */}
         <PanelCard>

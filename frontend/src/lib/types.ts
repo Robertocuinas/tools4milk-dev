@@ -56,6 +56,13 @@ export type Alert = {
   notas_operario?: string | null;
   accion_tomada?: string | null;
   veterinario_responsable?: string | null;
+  version: number;
+};
+
+export type AlertMutationResponse = {
+  operation_id: string;
+  replayed: boolean;
+  alert: Alert;
 };
 
 export type AlertsResponse = {
@@ -415,6 +422,25 @@ export type QualitySummary = {
   animales_en_control: number;
 };
 
+export type AnimalReading = {
+  ts: string;
+  fecha: string;
+  produccion_kg: number | null;
+  scc: number | null;
+  conductividad: number | null;
+  flujo_max: number | null;
+  duracion_min: number | null;
+};
+
+export type AnimalReadingsResponse = {
+  animal_id: string;
+  provenance: { source: string; mode: string; synthetic: boolean };
+  count: number;
+  days: number;
+  limit: number;
+  readings: AnimalReading[];
+};
+
 export type Employee = {
   id: string;
   nombre: string;
@@ -472,6 +498,31 @@ export type WeatherForecast = {
   is_forecast?: boolean;
 };
 
+export type WeatherCorrelationAssociation = {
+  variable_meteo: string;
+  variable_productiva: string;
+  n: number;
+  pearson_r: number | null;
+  media_meteo: number | null;
+  media_productiva: number | null;
+  interpretacion: string;
+};
+
+export type WeatherCorrelation = {
+  ubicacion: string;
+  dias_adelante: number;
+  ventana_dias: number;
+  metodo: string;
+  formula: string;
+  status: "sufficient" | "insufficient_data";
+  sample_size: number;
+  min_sample_size: number;
+  asociaciones: WeatherCorrelationAssociation[];
+  impactos_predichos: unknown[];
+  aviso: string;
+  provenance: Provenance;
+};
+
 export type ApiErrorPayload = {
   detail?: string | { msg?: string }[];
   status_code?: number;
@@ -504,4 +555,50 @@ export type UnifiedIncident = {
   reportado_por?: string | null;
   recomendacion?: string | null;
   alertaEstado?: AlertState;
+  alertVersion?: number;
+};
+
+// ── Panel operativo R4-4 (scheduler sintético + weather sync, solo admin) ────
+// Contratos 1:1 con GET/POST /api/v1/admin/synthetic/* y POST /api/v1/weather/sync.
+// Solo datos sintéticos de demostración; nunca infraestructura ni secretos.
+
+export type SyntheticSchedulerLastExecution = {
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  created: number | null;
+  skipped: number | null;
+  errors: number | null;
+  error: string | null;
+};
+
+export type SyntheticSchedulerStatus = {
+  paused: boolean;
+  last_execution: SyntheticSchedulerLastExecution;
+  // Presentes solo en respuestas de POST /scheduler/run (no usado por el panel).
+  status?: "ok" | "paused" | "error";
+  created?: number;
+  skipped?: number;
+  errors?: number;
+  duration_ms?: number;
+  finished_at?: string;
+};
+
+export type SyntheticResetResult = {
+  tasks: number;
+  recurrences: number;
+  provenance: number;
+  operation_dedupe: number;
+};
+
+export type WeatherSyncResult = {
+  status: "success" | "error";
+  modo: "generated" | "aemet_real";
+  registros_insertados: number;
+  registros_actualizados: number;
+  error?: string | null;
+  timestamp: string;
+  source?: "generated" | "aemet_real";
+  mode?: "synthetic" | "real";
+  synthetic?: boolean;
 };

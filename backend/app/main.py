@@ -20,6 +20,7 @@ from app.openapi import install_openapi
 from app.routers import (
     admin,
     alerts,
+    animal_readings,
     animals,
     audit,
     auth,
@@ -314,6 +315,7 @@ app.include_router(admin.router)
 # Routers de dominio (antes el monolítico frontend_core.py), todos bajo /api/v1.
 app.include_router(dashboard.router)
 app.include_router(animals.router)
+app.include_router(animal_readings.router)
 app.include_router(zones.router)
 app.include_router(tasks.router)
 app.include_router(lactations.router)

@@ -26,4 +26,5 @@ def serialize(a: Alerta) -> dict[str, Any]:
         "notas_operario": None,
         "accion_tomada": None,
         "veterinario_responsable": None,
+        "version": a.version,
     }

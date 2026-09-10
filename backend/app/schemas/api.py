@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -49,8 +50,15 @@ class AlertCreate(BaseModel):
 
 
 class AlertUpdate(BaseModel):
-    estado: Literal["pendiente", "revisada", "resuelta", "falsa_alarma"] | None = None
+    estado: Literal["resuelta"]
     notas_operario: str | None = None
+    expected_version: int = Field(..., gt=0)
+
+
+class AlertMutationResponse(BaseModel):
+    operation_id: str
+    replayed: bool
+    alert: dict[str, Any]
 
 
 class AlertsResponse(BaseModel):
@@ -60,3 +68,58 @@ class AlertsResponse(BaseModel):
     estadisticas: dict[str, Any] | None = None
     skip: int = 0
     limit: int = 50
+
+
+class ProvenanceResponse(BaseModel):
+    source: Literal["generated", "aemet_real"]
+    mode: Literal["synthetic", "real"]
+    synthetic: bool
+
+
+class AnimalReadingResponse(BaseModel):
+    ts: datetime
+    fecha: date
+    produccion_kg: float | None = None
+    scc: int | None = None
+    conductividad: float | None = None
+    flujo_max: float | None = None
+    duracion_min: float | None = None
+
+
+class AnimalReadingsResponse(BaseModel):
+    animal_id: str
+    provenance: ProvenanceResponse
+    count: int = Field(ge=0)
+    days: int = Field(ge=1, le=90)
+    limit: int = Field(ge=1, le=180)
+    readings: list[AnimalReadingResponse]
+
+
+class WeatherCorrelationAssociation(BaseModel):
+    """Asociación descriptiva entre una variable meteo y una productiva."""
+
+    variable_meteo: str
+    variable_productiva: str
+    n: int = Field(ge=0)
+    pearson_r: float | None = None
+    media_meteo: float | None = None
+    media_productiva: float | None = None
+    interpretacion: str
+
+
+class WeatherCorrelationResponse(BaseModel):
+    """Contrato tipado de GET /weather/correlation/impact (Release 4 DSS)."""
+
+    ubicacion: str
+    dias_adelante: int = Field(ge=1, le=30)
+    ventana_dias: int = Field(ge=1, le=90)
+    metodo: str
+    formula: str
+    status: Literal["sufficient", "insufficient_data"]
+    sample_size: int = Field(ge=0)
+    min_sample_size: int = Field(ge=1)
+    asociaciones: list[WeatherCorrelationAssociation]
+    # Clave legacy del stub: se conserva vacía para compatibilidad.
+    impactos_predichos: list[dict[str, Any]] = Field(default_factory=list)
+    aviso: str
+    provenance: ProvenanceResponse

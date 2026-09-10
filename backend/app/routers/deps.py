@@ -19,6 +19,7 @@ AnimalManager = Annotated[Usuario, Depends(require_roles("admin", "veterinario")
 TaskManager = Annotated[Usuario, Depends(require_roles("admin", "operario", "alimentacion"))]
 ClinicalManager = Annotated[Usuario, Depends(require_roles("admin", "veterinario"))]
 QualityManager = Annotated[Usuario, Depends(require_roles("admin", "veterinario", "alimentacion"))]
+QualityReader = Annotated[Usuario, Depends(require_roles("admin", "veterinario", "operario", "alimentacion"))]
 OperationsManager = Annotated[Usuario, Depends(require_roles("admin", "operario", "alimentacion"))]
 PredictionReader = Annotated[Usuario, Depends(require_roles("admin", "veterinario", "alimentacion"))]
 WeatherReader = Annotated[Usuario, Depends(require_roles("admin", "veterinario", "operario", "alimentacion"))]

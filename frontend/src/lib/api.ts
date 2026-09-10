@@ -8,6 +8,7 @@ import type {
   AlertsResponse,
   Animal,
   AnimalPrediction,
+  AnimalReadingsResponse,
   AuditLogResponse,
   AuthResponse,
   BoxRecria,
@@ -31,6 +32,8 @@ import type {
   ShiftAssignmentsResponse,
   ShiftHandover,
   ShiftHandoversResponse,
+  SyntheticResetResult,
+  SyntheticSchedulerStatus,
   UnifiedEstado,
   UnifiedIncident,
   UnifiedSeverity,
@@ -38,8 +41,10 @@ import type {
   Task,
   TaskCatalogItem,
   Treatment,
+  WeatherCorrelation,
   WeatherData,
   WeatherForecast,
+  WeatherSyncResult,
   Zone,
 } from "@/lib/types";
 
@@ -251,8 +256,18 @@ export const api = {
     return request<Alert>("/alerts", { method: "POST", body: JSON.stringify(body) });
   },
 
-  reviewAlert(alertId: string, body: Partial<Alert>) {
-    return request<Alert>(`/alerts/${alertId}`, { method: "PATCH", body: JSON.stringify(body) });
+  resolveAlert(alert: Pick<Alert, "id" | "version">, operationId = crypto.randomUUID()) {
+    return request<{ operation_id: string; replayed: boolean; alert: Alert }>(
+      `/alerts/${alert.id}`,
+      {
+        method: "PATCH",
+        headers: { "X-Operation-Id": operationId },
+        body: JSON.stringify({
+          estado: "resuelta" satisfies AlertState,
+          expected_version: alert.version,
+        }),
+      },
+    );
   },
 
   generateAlerts(animalId: string) {
@@ -389,6 +404,10 @@ export const api = {
     return request<QualitySummary>("/lactations/quality/summary");
   },
 
+  animalReadings(animalId: string, params?: QueryParams) {
+    return request<AnimalReadingsResponse>(`/animals/${animalId}/readings`, {}, params);
+  },
+
   predictions(animalId: string, params?: QueryParams) {
     return request<AnimalPrediction>(`/predictions/${animalId}`, {}, params);
   },
@@ -508,6 +527,12 @@ export const api = {
     return request<void>(`/tareas-catalogo/${catalogId}`, { method: "DELETE" });
   },
 
+  // ── Weather correlation (R4-3, descriptiva sobre datos sintéticos) ─────────
+
+  weatherCorrelation(params?: QueryParams) {
+    return request<WeatherCorrelation>("/weather/correlation/impact", {}, params);
+  },
+
   // ── Weather readings (labelled version of sensor data) ────────────────────
 
   weatherReadings() {
@@ -544,6 +569,30 @@ export const api = {
       })),
     }));
   },
+
+  // ── Panel operativo R4-4 (solo admin; endpoints existentes) ────────────────
+  // Scheduler sintético de demostración + sincronización meteorológica.
+  // No hay edición de cron ni colas: solo status/pause/resume/reset/sync.
+
+  syntheticSchedulerStatus() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler");
+  },
+
+  pauseSyntheticScheduler() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler/pause", { method: "POST" });
+  },
+
+  resumeSyntheticScheduler() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler/resume", { method: "POST" });
+  },
+
+  resetSynthetic() {
+    return request<SyntheticResetResult>("/admin/synthetic/reset", { method: "POST" });
+  },
+
+  weatherSync() {
+    return request<WeatherSyncResult>("/weather/sync", { method: "POST" });
+  },
 };
 
 // ── Unified Incident Normalizers ────────────────────────────────────────────
@@ -574,6 +623,7 @@ export function normalizeAlert(a: Alert): UnifiedIncident {
     reportado_por: null,
     recomendacion: a.recomendacion ?? null,
     alertaEstado: a.estado,
+    alertVersion: a.version,
   };
 }
 

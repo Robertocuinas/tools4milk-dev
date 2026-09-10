@@ -1,5 +1,17 @@
 # Changelog
 
+## Release 4 — Matriz E2E sintética (R4-5, en curso)
+
+### Añadido
+
+- `backend/tests/test_r4_scenario_matrix.py`: huellas deterministas de los
+  5 escenarios (`small`, seed `20260910`) con provenance y DQ honesto.
+- `frontend/playwright/release4-scenario-matrix.spec.ts`: 6 tests (5
+  escenarios sobre `/quality`, `/tasks`, `/incidents`, `/predictions` +
+  barrido axe móvil/escritorio, cero `serious`/`critical`).
+- `docs/RELEASE4-R4-5-matriz-e2e.md` + sección R4-5 en `docs/RELEASE4.md`:
+  semilla, matriz, permisos, etiquetas honestas y gate reproducible.
+
 ## Release 3 — Demo portable y reproducible (base, en curso)
 
 ### Añadido

@@ -3,6 +3,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   BrainCircuit,
+  CloudSun,
   ExternalLink,
   Minus,
   RefreshCw,
@@ -14,9 +15,27 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { DonutStat, SparkArea } from "@/components/charts/MiniCharts";
 import { Pagination } from "@/components/common/Pagination";
+import { WeatherCorrelationPanel } from "@/components/dss/WeatherCorrelationPanel";
 import { api } from "@/lib/api";
 import { DEFAULT_PAGE_SIZE, getSkip } from "@/lib/pagination";
-import type { Animal, PredictionTrend, RiskLevel } from "@/lib/types";
+import type {
+  Animal,
+  CompositionPrediction,
+  HealthRiskPrediction,
+  PredictionTrend,
+  ProductionPrediction,
+  RiskLevel,
+} from "@/lib/types";
+
+type Vista = "compuesta" | "produccion" | "composicion" | "riesgo" | "meteo";
+
+const VISTAS: { id: Vista; label: string }[] = [
+  { id: "compuesta", label: "Compuesta" },
+  { id: "produccion", label: "Producción" },
+  { id: "composicion", label: "Composición" },
+  { id: "riesgo", label: "Riesgo sanitario" },
+  { id: "meteo", label: "Asociación meteo" },
+];
 
 const trendIcon: Record<PredictionTrend, typeof TrendingUp> = {
   aumento: TrendingUp,
@@ -31,11 +50,16 @@ const trendColor: Record<PredictionTrend, string> = {
 };
 
 const riskStyle: Record<RiskLevel, string> = {
-  bajo: "border-state-ok/30 bg-state-ok/10 text-state-ok",
-  medio: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion",
-  alto: "border-state-critica/30 bg-state-critica/10 text-state-critica",
-  critico: "border-state-critica bg-state-critica/20 text-state-critica",
+  bajo: "border-state-ok/30 bg-state-ok/10 text-state-ok-ink",
+  medio: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion-ink",
+  alto: "border-state-critica/30 bg-state-critica/10 text-state-critica-ink",
+  critico: "border-state-critica bg-state-critica/20 text-state-critica-ink",
 };
+
+function isForbidden(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /403|permiso/i.test(message);
+}
 
 // Etiqueta honesta: las estimaciones son heurísticas aritméticas, no un modelo de ML.
 // Por eso NO se muestra un "% de confianza" que pudiera sugerir un modelo predictivo entrenado.
@@ -67,22 +91,49 @@ function MetricBox({
   );
 }
 
-// Componente autocontenido: gestiona su propia query cacheada por animal
+type CardData = {
+  produccion?: ProductionPrediction | null;
+  composicion?: CompositionPrediction | null;
+  riesgo_sanitario?: HealthRiskPrediction | null;
+  _mock?: boolean;
+};
+
+// Componente autocontenido: gestiona su propia query cacheada por animal y vista.
+// La vista granular consume el endpoint dedicado (/predictions/production/...,
+// /predictions/composition/..., /predictions/health-risk/...); la compuesta
+// usa /predictions/{id}.
 function PredictionCard({
   animal,
   enabled,
   onEnable,
+  vista,
 }: {
   animal: Animal;
   enabled: boolean;
   onEnable: (id: string) => void;
+  vista: Exclude<Vista, "meteo">;
 }) {
   const predQuery = useQuery({
-    queryKey: ["prediction", animal.id],
-    queryFn: () => api.predictions(animal.id, { dias_adelante: 7 }),
+    queryKey: ["prediction", vista, animal.id],
+    queryFn: async (): Promise<CardData> => {
+      const params = { dias_adelante: 7 };
+      if (vista === "produccion") {
+        const produccion = await api.productionPrediction(animal.id, params);
+        return { produccion };
+      }
+      if (vista === "composicion") {
+        const composicion = await api.compositionPrediction(animal.id);
+        return { composicion };
+      }
+      if (vista === "riesgo") {
+        const riesgo_sanitario = await api.healthRiskPrediction(animal.id, params);
+        return { riesgo_sanitario };
+      }
+      return api.predictions(animal.id, params);
+    },
     enabled,
     staleTime: 5 * 60_000,   // 5 min: no refetch si los datos son frescos
-    gcTime: 30 * 60_000,     // 30 min: mantener en cachÃ© aunque el componente se desmonte
+    gcTime: 30 * 60_000,     // 30 min: mantener en caché aunque el componente se desmonte
     retry: 1,
   });
 
@@ -93,6 +144,9 @@ function PredictionCard({
   const riskLevel = risk?.riesgo_promedio ?? "bajo";
   const hasAlert = riskLevel === "alto" || riskLevel === "critico" || prod?.tendencia === "descenso";
   const TrendIcon = prod ? trendIcon[prod.tendencia] : Minus;
+  const showProd = vista === "compuesta" || vista === "produccion";
+  const showComp = vista === "compuesta" || vista === "composicion";
+  const showRisk = vista === "compuesta" || vista === "riesgo";
 
   return (
     <div className={`rounded-[10px] border bg-white p-4 ${hasAlert ? "border-state-critica/35" : "border-app-border"}`}>
@@ -115,22 +169,37 @@ function PredictionCard({
             <span className="capitalize">{animal.estado}</span>
           </div>
         </div>
-        {prediction && (
+        {prediction && showRisk && (
           <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase ${riskStyle[riskLevel]}`}>
             {riskLevel}
           </span>
         )}
         {/* Indicador de datos mock */}
         {prediction?._mock && (
-          <span className="shrink-0 rounded-full bg-state-atencion/10 px-2 py-0.5 text-[10px] font-bold text-state-atencion">
+          <span className="shrink-0 rounded-full bg-state-atencion/10 px-2 py-0.5 text-[10px] font-bold text-state-atencion-ink">
             demo
           </span>
         )}
       </div>
 
       {predQuery.isError && (
-        <div className="mt-3 rounded-[10px] bg-state-critica/10 px-3 py-2 text-xs font-semibold text-state-critica">
-          Error al cargar prediccion
+        <div className="mt-3 space-y-2">
+          <div
+            role="alert"
+            className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-xs font-semibold text-state-critica-ink"
+          >
+            {isForbidden(predQuery.error)
+              ? "Sin permiso para ver predicciones (requiere admin, veterinario o alimentación)"
+              : "Error al cargar prediccion"}
+          </div>
+          <button
+            type="button"
+            onClick={() => predQuery.refetch()}
+            disabled={predQuery.isFetching}
+            className="rounded-[10px] bg-app-bg px-4 py-2 text-xs font-bold text-brand transition hover:bg-app-bg disabled:opacity-50"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 
@@ -140,11 +209,20 @@ function PredictionCard({
         </div>
       )}
 
-      {prediction && prod ? (
+      {prediction && (prod || comp || risk) ? (
         <div className="mt-4 space-y-3">
-          <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/10 px-3 py-2 text-[11px] font-semibold text-state-atencion">
+          <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/10 px-3 py-2 text-[11px] font-semibold text-state-atencion-ink">
             Demo sintética · heurística aritmética · no validada en campo · no es recomendación clínica/productiva
           </div>
+          {vista !== "compuesta" && (
+            <div className="text-[11px] font-semibold text-app-dim">
+              Vista granular · endpoint dedicado{" "}
+              <span className="font-mono">
+                /predictions/{vista === "riesgo" ? "health-risk" : vista}/{animal.id}
+              </span>
+            </div>
+          )}
+          {showProd && prod && (
           <div className="rounded-[10px] bg-app-bg p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-app-dim">
@@ -181,7 +259,38 @@ function PredictionCard({
               )}
             </div>
           </div>
+          )}
 
+          {showComp && comp && (
+          <div className="rounded-[10px] bg-app-bg p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-app-dim">
+                Composición prevista
+              </span>
+              <HeuristicTag />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <MetricBox label="Grasa" value={comp.grasa && comp.grasa.prediccion > 0 ? `${comp.grasa.prediccion.toFixed(2)}%` : "n/d"} />
+              <MetricBox label="Proteína" value={comp.proteina && comp.proteina.prediccion > 0 ? `${comp.proteina.prediccion.toFixed(2)}%` : "n/d"} />
+              <MetricBox
+                label="Anomalía"
+                value={comp.anomalia_detectada ? "sí" : "no"}
+                tone={comp.anomalia_detectada ? "text-state-critica" : "text-state-ok"}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-app-dim">
+              La composición es un placeholder (0 → n/d): aún no se calcula a partir de datos.
+            </p>
+          </div>
+          )}
+
+          {showRisk && (vista === "riesgo" ? (
+            <MetricBox
+              label="Riesgo"
+              value={riskLevel}
+              tone={riskLevel === "bajo" ? "text-state-ok" : riskLevel === "medio" ? "text-state-atencion" : "text-state-critica"}
+            />
+          ) : (
           <div className="grid grid-cols-3 gap-2">
             <MetricBox label="Grasa" value={comp?.grasa && comp.grasa.prediccion > 0 ? `${comp.grasa.prediccion.toFixed(2)}%` : "n/d"} />
             <MetricBox label="Proteina" value={comp?.proteina && comp.proteina.prediccion > 0 ? `${comp.proteina.prediccion.toFixed(2)}%` : "n/d"} />
@@ -191,11 +300,12 @@ function PredictionCard({
               tone={riskLevel === "bajo" ? "text-state-ok" : riskLevel === "medio" ? "text-state-atencion" : "text-state-critica"}
             />
           </div>
+          ))}
 
-          {risk?.factores_riesgo && risk.factores_riesgo.length > 0 && (
+          {showRisk && risk?.factores_riesgo && risk.factores_riesgo.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {risk.factores_riesgo.slice(0, 3).map((factor) => (
-                <span key={factor} className="rounded-full bg-state-atencion/10 px-2.5 py-0.5 text-[11px] font-semibold text-state-atencion">
+                <span key={factor} className="rounded-full bg-state-atencion/10 px-2.5 py-0.5 text-[11px] font-semibold text-state-atencion-ink">
                   {factor}
                 </span>
               ))}
@@ -224,7 +334,10 @@ export default function PredictionsPage() {
   // Set de IDs cuya prediccion debe cargarse (persistido en el componente)
   const [enabledIds, setEnabledIds] = useState<Set<string>>(() => new Set());
   const [page, setPage] = useState(1);
+  const [vista, setVista] = useState<Vista>("compuesta");
   const pageSize = DEFAULT_PAGE_SIZE;
+  // En la vista meteo las tarjetas muestran el contexto de producción.
+  const cardVista: Exclude<Vista, "meteo"> = vista === "meteo" ? "produccion" : vista;
 
   const animalsQuery = useQuery({
     queryKey: ["animals-produccion", page],
@@ -254,7 +367,7 @@ export default function PredictionsPage() {
     });
   }
 
-  // useQueries para estadÃ­sticas reactivas â€" comparte cachÃ© con cada PredictionCard
+  // useQueries para estadísticas reactivas — comparte caché con cada PredictionCard
   // (React Query deduplica: no genera peticiones extra cuando el card ya hizo la suya)
   const enabledIdsList = useMemo(() => Array.from(enabledIds), [enabledIds]);
 
@@ -312,6 +425,29 @@ export default function PredictionsPage() {
             Cargar pagina
           </button>
         </div>
+        <div role="tablist" aria-label="Vista de predicción" className="mt-4 flex flex-wrap gap-2">
+          {VISTAS.map(({ id, label }) => {
+            const selected = vista === id;
+            const Icon = id === "meteo" ? CloudSun : id === "riesgo" ? ShieldAlert : BrainCircuit;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setVista(id)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition ${
+                  selected
+                    ? "border-brand bg-brand text-white"
+                    : "border-app-border bg-white text-app-dim hover:text-app-text"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-6 px-6 py-6 lg:px-8">
@@ -341,16 +477,18 @@ export default function PredictionsPage() {
         */}
         <div
           role="note"
-          className="flex items-start gap-2 rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info"
+          className="flex items-start gap-2 rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info-ink"
         >
           <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>
             Estimaciones calculadas mediante <strong>heurísticas aritméticas</strong>{" "}
-            (no modelos de machine learning). La composición de leche (grasa/proteína) aún
-            no se calcula y se muestra como «n/d». Horizonte orientativo de 7 días; las
+            (no modelos de machine learning). La composición de leche (grasa/proteína) es
+            un placeholder y se muestra como «n/d». Horizonte orientativo de 7 días; las
             recomendaciones no sustituyen el criterio veterinario.
           </div>
         </div>
+
+        {vista === "meteo" && <WeatherCorrelationPanel />}
 
         {stats.loaded > 0 && (
           <div className="grid gap-4 xl:grid-cols-[1.4fr_280px]">
@@ -378,10 +516,11 @@ export default function PredictionsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {pageAnimals.map((animal) => (
               <PredictionCard
-                key={animal.id}
+                key={`${cardVista}-${animal.id}`}
                 animal={animal}
                 enabled={enabledIds.has(animal.id)}
                 onEnable={enableAnimal}
+                vista={cardVista}
               />
             ))}
           </div>

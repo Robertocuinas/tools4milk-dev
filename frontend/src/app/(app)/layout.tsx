@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Beef,
+  Bell,
   BrainCircuit,
   CalendarClock,
   Droplets,
@@ -68,6 +69,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Operativa",
     items: [
       { href: "/leanfarming", label: "LeanFarming", Icon: ListTodo },
+      { href: "/alerts", label: "Alertas", Icon: Bell, capability: "view_alerts" },
       { href: "/incidents", label: "Incidencias", Icon: AlertOctagon },
       { href: "/shifts", label: "Turnos", Icon: CalendarClock },
       { href: "/quality", label: "Calidad", Icon: Droplets },

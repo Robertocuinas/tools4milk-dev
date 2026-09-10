@@ -10,11 +10,12 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
 import { api, normalizeAlert, normalizeIncident } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import type {
   AlertState,
   CreateIncidentPayload,
@@ -44,16 +45,16 @@ const STATUS_LABELS: Record<IncidentStatus, string> = {
 };
 
 const STATUS_STYLES: Record<IncidentStatus, string> = {
-  abierta: "bg-state-critica/15 text-state-critica border-state-critica/30",
-  en_gestion: "bg-state-atencion/15 text-state-atencion border-state-atencion/30",
-  resuelta: "bg-state-ok/15 text-state-ok border-state-ok/30",
+  abierta: "bg-state-critica/15 text-state-critica-ink border-state-critica/30",
+  en_gestion: "bg-state-atencion/15 text-state-atencion-ink border-state-atencion/30",
+  resuelta: "bg-state-ok/15 text-state-ok-ink border-state-ok/30",
   cerrada: "bg-state-neutral/10 text-state-neutral border-state-neutral/20",
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
-  critica: "bg-state-critica/15 text-state-critica",
-  alta: "bg-state-atencion/15 text-state-atencion",
-  media: "bg-state-info/15 text-state-info",
+  critica: "bg-state-critica/15 text-state-critica-ink",
+  alta: "bg-state-atencion/15 text-state-atencion-ink",
+  media: "bg-state-info/15 text-state-info-ink",
   baja: "bg-state-neutral/10 text-state-neutral",
 };
 
@@ -148,9 +149,9 @@ function CreateIncidentModal({
   });
 
   const priorities: { value: IncidentPriority; label: string; cls: string }[] = [
-    { value: "critica", label: "Critica", cls: "border-state-critica text-state-critica bg-state-critica/10" },
-    { value: "alta", label: "Alta", cls: "border-state-atencion text-state-atencion bg-state-atencion/10" },
-    { value: "media", label: "Media", cls: "border-state-info text-state-info bg-state-info/10" },
+    { value: "critica", label: "Critica", cls: "border-state-critica text-state-critica-ink bg-state-critica/10" },
+    { value: "alta", label: "Alta", cls: "border-state-atencion text-state-atencion-ink bg-state-atencion/10" },
+    { value: "media", label: "Media", cls: "border-state-info text-state-info-ink bg-state-info/10" },
     { value: "baja", label: "Baja", cls: "border-app-dim text-app-dim bg-app-bg" },
   ];
 
@@ -184,10 +185,11 @@ function CreateIncidentModal({
 
           {/* Tipo */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="inc-tipo" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Tipo
             </label>
             <select
+              id="inc-tipo"
               value={tipo}
               onChange={(e) => setTipo(e.target.value)}
               className="h-11 w-full rounded-[10px] border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-brand"
@@ -200,10 +202,11 @@ function CreateIncidentModal({
 
           {/* Zona (opcional) */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="inc-zona" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Zona (opcional)
             </label>
             <select
+              id="inc-zona"
               value={zonaId}
               onChange={(e) => setZonaId(e.target.value)}
               className="h-11 w-full rounded-[10px] border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-brand"
@@ -217,10 +220,11 @@ function CreateIncidentModal({
 
           {/* DescripciÃ³n */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="inc-descripcion" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Descripcion *
             </label>
             <textarea
+              id="inc-descripcion"
               rows={3}
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
@@ -230,7 +234,7 @@ function CreateIncidentModal({
           </div>
 
           {mutation.isError && (
-            <p className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-sm text-state-critica">
+            <p className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-sm text-state-critica-ink">
               {mutation.error.message}
             </p>
           )}
@@ -260,9 +264,7 @@ function CreateIncidentModal({
 
 function getNextStatuses(item: UnifiedIncident): UnifiedEstado[] {
   if (item.origen === "alerta") {
-    if (item.estado === "abierta") return ["en_gestion", "resuelta"];
-    if (item.estado === "en_gestion") return ["resuelta", "cerrada"];
-    return [];
+    return item.estado === "abierta" || item.estado === "en_gestion" ? ["resuelta"] : [];
   }
   const machine: Partial<Record<UnifiedEstado, UnifiedEstado[]>> = {
     abierta: ["en_gestion", "resuelta"],
@@ -285,9 +287,10 @@ function UnifiedCard({
   animalLookup: Map<string, string>;
   zoneLookup: Map<string, string>;
 }) {
+  const { can } = usePermissions();
   const [expanded, setExpanded] = useState(false);
   const isUpdating = updatingId === item.id;
-  const available = getNextStatuses(item);
+  const available = item.origen === "alerta" && !can("resolve_alert") ? [] : getNextStatuses(item);
 
   const statusBtnStyle: Record<UnifiedEstado, string> = {
     en_gestion: "bg-state-atencion/15 text-state-atencion hover:bg-state-atencion/25",
@@ -372,7 +375,15 @@ function UnifiedCard({
                   key={next}
                   type="button"
                   disabled={isUpdating}
-                  onClick={() => onStatusChange(item, next)}
+                  onClick={() => {
+                    if (
+                      item.origen === "alerta" &&
+                      !window.confirm("¿Marcar esta alerta sintética como resuelta?")
+                    ) {
+                      return;
+                    }
+                    onStatusChange(item, next);
+                  }}
                   className={`inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-xs font-bold transition disabled:opacity-50 ${statusBtnStyle[next]}`}
                 >
                   {isUpdating ? (
@@ -408,6 +419,7 @@ export default function IncidentsPage() {
   const [prioridadFilter, setPrioridadFilter] = useState<FilterPrioridad>("todas");
   const [showCreate, setShowCreate] = useState(() => searchParams.get("new") === "1");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const alertOperationIds = useRef(new Map<string, string>());
 
   const incidentsQuery = useQuery({
     queryKey: ["incidents"],
@@ -464,11 +476,24 @@ export default function IncidentsPage() {
           : estado === "en_gestion" ? "revisada"
           : estado === "resuelta" ? "resuelta"
           : "falsa_alarma";
-        return api.reviewAlert(item.rawId, { estado: alertEstado });
+        if (alertEstado !== "resuelta") {
+          throw new Error("Las alertas solo se resuelven desde este recorrido seguro.");
+        }
+        if (item.alertVersion === undefined) {
+          throw new Error("La alerta no incluye una versión válida; actualiza la lista e inténtalo de nuevo.");
+        }
+        const operationId = alertOperationIds.current.get(item.id) ?? crypto.randomUUID();
+        alertOperationIds.current.set(item.id, operationId);
+        return api.resolveAlert({ id: item.rawId, version: item.alertVersion }, operationId);
       }
       return api.updateIncident(item.rawId, { estado });
     },
     onMutate: ({ item }) => setUpdatingId(item.id),
+    onSuccess: (_response, { item }) => {
+      if (item.origen === "alerta") {
+        alertOperationIds.current.delete(item.id);
+      }
+    },
     onError: (err: Error) => {
       toast.error(err.message || "Error al actualizar");
     },
@@ -546,6 +571,7 @@ export default function IncidentsPage() {
           <span className="text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">Prioridad:</span>
           <select
             value={prioridadFilter}
+            aria-label="Filtrar por prioridad"
             onChange={(e) => setPrioridadFilter(e.target.value as FilterPrioridad)}
             className="rounded-[10px] border border-app-border bg-white px-3 py-2 text-sm font-semibold text-app-text outline-none"
           >

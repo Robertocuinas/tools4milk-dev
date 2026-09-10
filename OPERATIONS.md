@@ -372,6 +372,18 @@ git. Los prefijos siguen la convención:
   `release2-full-matrix-cert`, `release2-offline-cert-independent`),
   sobre la suite pytest (114 tests), 0 lint errors y 0 tsc errors.
   El job CI de portabilidad queda para la siguiente tarjeta R3.
+- **R4-5 / Matriz E2E DSS sintética** — 5 escenarios (`normal`,
+  `delayed_tasks`, `health_alert`, `degraded_quality`, `incomplete_data`,
+  `small`, seed `20260910`) en
+  `frontend/playwright/release4-scenario-matrix.spec.ts` (6 tests con axe
+  serio/crítico a cero) más huellas backend en
+  `backend/tests/test_r4_scenario_matrix.py`. Gate R4-5 en orden:
+  `pytest backend/tests` + `pytest tests/test_demo_cli.py` → `typecheck` +
+  `lint` + `build` → `npm audit --omit=dev --audit-level=high` → OpenAPI
+  determinista (doble generación) → `playwright test` completo (los 3 specs
+  con login, vía `TFM_DEMO_PASSWORD` del `.env` demo, contra el stack
+  `tfm_r3_demo`) → `git diff --check`. Detalle en
+  `docs/RELEASE4-R4-5-matriz-e2e.md`.
 - **Doble-llave para rotación de SECRET_KEY sin logout forzado** —
   solo si el sistema pasa a producción con usuarios activos y se
   necesita rotación de secreto sin interrupciones.
