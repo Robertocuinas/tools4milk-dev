@@ -191,9 +191,10 @@ export default function IntegrationPage() {
                 <>
                   <InfoLine label="Temperatura" value={`${weatherQ.data.temperatura_actual?.toFixed(1) ?? "—"} °C`} />
                   <InfoLine label="Descripción" value={weatherQ.data.descripcion ?? "—"} />
-                  {weatherQ.data.impacto_productivo && (
-                    <InfoLine label="Impacto producción" value={weatherQ.data.impacto_productivo} />
-                  )}
+                  <InfoLine
+                    label="Lectura"
+                    value="Descriptiva; sin inferencia causal ni productiva"
+                  />
                 </>
               )}
             </div>

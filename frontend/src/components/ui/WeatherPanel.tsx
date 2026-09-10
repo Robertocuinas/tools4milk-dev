@@ -88,9 +88,7 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
             {noData ? "Sin datos" : `${formatTemp(temp)}${w?.humedad != null ? ` · ${w.humedad.toFixed(0)}% HR` : ""}`}
           </p>
         </div>
-        {w?.impacto_productivo && (
-          <span className={`ml-auto text-xs ${sub}`}>{w.impacto_productivo}</span>
-        )}
+        <span className={`ml-auto text-[11px] ${sub}`}>Descriptivo; sin impacto productivo</span>
       </div>
     );
   }
@@ -132,12 +130,10 @@ export function WeatherPanel({ compact = false, dark = false }: WeatherPanelProp
                 </div>
               </div>
             )}
-            {w?.impacto_productivo && (
-              <div>
-                <p className={`text-[10px] font-semibold uppercase ${title}`}>Impacto</p>
-                <p className={`text-sm font-semibold capitalize ${value}`}>{w.impacto_productivo}</p>
-              </div>
-            )}
+            <div>
+              <p className={`text-[10px] font-semibold uppercase ${title}`}>Lectura</p>
+              <p className={`text-sm font-semibold ${value}`}>Descriptiva; sin impacto productivo</p>
+            </div>
           </div>
         )}
       </div>

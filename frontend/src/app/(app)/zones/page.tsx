@@ -135,6 +135,11 @@ export default function ZonesPage() {
 
   const openIncidents = incidents.filter(hasOpenIncident).length;
   const pendingTasks = tasks.filter(isPendingTask).length;
+  const visualCount = Object.keys(VISUAL_ZONES).length;
+  const subzoneCount = Object.values(VISUAL_ZONES).reduce((acc, v) => acc + v.subzones.length, 0);
+  const tasksSinZona = tasks.filter((t) => !t.zona_id).length;
+  const incidentsSinZona = incidents.filter((i) => !i.zona_id).length;
+  const machinerySinZona = machinery.filter((m) => !m.zona_id).length;
 
   return (
     <div className="min-h-full">
@@ -146,10 +151,16 @@ export default function ZonesPage() {
 
       <div className="space-y-5 px-6 py-6 lg:px-8">
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <KpiCard label="Visualizaciones" value={2} />
-          <KpiCard label="Subzonas activas" value={7} tone="success" />
+          <KpiCard label="Visualizaciones" value={visualCount} />
+          <KpiCard label="Subzonas activas" value={subzoneCount} tone="success" />
           <KpiCard label="Tareas pendientes" value={pendingTasks} Icon={ClipboardList} tone={pendingTasks > 0 ? "info" : "success"} />
           <KpiCard label="Incidencias abiertas" value={openIncidents} Icon={AlertOctagon} tone={openIncidents > 0 ? "warning" : "success"} />
+        </div>
+        <div className="rounded-[14px] border border-app-border bg-white px-5 py-4 text-sm text-app-dim shadow-card">
+          Zonas en catálogo: {zones.length}. Los registros sin zona asignada (zona_id NULL por borrado
+          histórico con ON DELETE SET NULL) no se ocultan: {tasksSinZona} tareas · {incidentsSinZona}{" "}
+          incidencias · {machinerySinZona} equipos sin zona. Esta vista muestra las dos visualizaciones
+          operativas (Recría y Nave); las zonas históricas siguen en base de datos para no romper relaciones.
         </div>
 
         <WeatherPanel compact />
@@ -167,7 +178,8 @@ export default function ZonesPage() {
         )}
 
         <div className="rounded-[14px] border border-app-border bg-white px-5 py-4 text-sm text-app-dim shadow-card">
-          Las zonas historicas siguen en base de datos para no romper relaciones, pero esta vista solo muestra las dos visualizaciones operativas: Recria y Nave.
+          Política de zonas: las zonas históricas siguen en base de datos para no romper relaciones y
+          esta vista solo muestra las dos visualizaciones operativas: Recría y Nave.
         </div>
       </div>
     </div>

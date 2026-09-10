@@ -471,6 +471,8 @@ export type WeatherData = {
   prob_precipitacion_pct?: number | null;
   descripcion?: string | null;
   impacto_productivo?: string | null;
+  aviso?: string | null;
+  suficiencia?: string | null;
   fecha?: string | null;
   ubicacion?: string | null;
 };
