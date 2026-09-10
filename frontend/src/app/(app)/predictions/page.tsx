@@ -50,10 +50,10 @@ const trendColor: Record<PredictionTrend, string> = {
 };
 
 const riskStyle: Record<RiskLevel, string> = {
-  bajo: "border-state-ok/30 bg-state-ok/10 text-state-ok",
-  medio: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion",
-  alto: "border-state-critica/30 bg-state-critica/10 text-state-critica",
-  critico: "border-state-critica bg-state-critica/20 text-state-critica",
+  bajo: "border-state-ok/30 bg-state-ok/10 text-state-ok-ink",
+  medio: "border-state-atencion/30 bg-state-atencion/10 text-state-atencion-ink",
+  alto: "border-state-critica/30 bg-state-critica/10 text-state-critica-ink",
+  critico: "border-state-critica bg-state-critica/20 text-state-critica-ink",
 };
 
 function isForbidden(error: unknown): boolean {
@@ -176,7 +176,7 @@ function PredictionCard({
         )}
         {/* Indicador de datos mock */}
         {prediction?._mock && (
-          <span className="shrink-0 rounded-full bg-state-atencion/10 px-2 py-0.5 text-[10px] font-bold text-state-atencion">
+          <span className="shrink-0 rounded-full bg-state-atencion/10 px-2 py-0.5 text-[10px] font-bold text-state-atencion-ink">
             demo
           </span>
         )}
@@ -186,7 +186,7 @@ function PredictionCard({
         <div className="mt-3 space-y-2">
           <div
             role="alert"
-            className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-xs font-semibold text-state-critica"
+            className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-xs font-semibold text-state-critica-ink"
           >
             {isForbidden(predQuery.error)
               ? "Sin permiso para ver predicciones (requiere admin, veterinario o alimentación)"
@@ -211,7 +211,7 @@ function PredictionCard({
 
       {prediction && (prod || comp || risk) ? (
         <div className="mt-4 space-y-3">
-          <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/10 px-3 py-2 text-[11px] font-semibold text-state-atencion">
+          <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/10 px-3 py-2 text-[11px] font-semibold text-state-atencion-ink">
             Demo sintética · heurística aritmética · no validada en campo · no es recomendación clínica/productiva
           </div>
           {vista !== "compuesta" && (
@@ -305,7 +305,7 @@ function PredictionCard({
           {showRisk && risk?.factores_riesgo && risk.factores_riesgo.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {risk.factores_riesgo.slice(0, 3).map((factor) => (
-                <span key={factor} className="rounded-full bg-state-atencion/10 px-2.5 py-0.5 text-[11px] font-semibold text-state-atencion">
+                <span key={factor} className="rounded-full bg-state-atencion/10 px-2.5 py-0.5 text-[11px] font-semibold text-state-atencion-ink">
                   {factor}
                 </span>
               ))}
@@ -477,7 +477,7 @@ export default function PredictionsPage() {
         */}
         <div
           role="note"
-          className="flex items-start gap-2 rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info"
+          className="flex items-start gap-2 rounded-[10px] border border-state-info/30 bg-state-info/5 px-4 py-3 text-xs font-semibold text-state-info-ink"
         >
           <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <div>

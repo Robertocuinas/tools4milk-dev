@@ -35,6 +35,13 @@
   --color-state-info:     #2563eb;
   --color-state-neutral:  #64748b;
 
+  /* ── State ink (texto sobre superficies tintadas) ── */
+  /* Los tonos base no alcanzan 4.5:1 sobre sus tintes; estos sí. */
+  --color-state-critica-ink:  #991b1b;
+  --color-state-atencion-ink: #78350f;
+  --color-state-ok-ink:       #166534;
+  --color-state-info-ink:     #1e40af;
+
   /* Shared layout and interaction tokens */
   --spacing-control: 2.75rem;
   --focus-ring: 0 0 0 3px rgba(27, 94, 59, 0.28);

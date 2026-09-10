@@ -31,13 +31,13 @@ const tabConfig: Record<FilterTab, { label: string; color: string; Icon: typeof 
 };
 
 const statusStyles: Record<TaskStatus, string> = {
-  pendiente: "bg-state-info/15 text-state-info",
+  pendiente: "bg-state-info/15 text-state-info-ink",
   en_curso: "bg-state-warning/15 text-state-warning",
   verificacion: "bg-state-warning/15 text-state-warning",
-  completada: "bg-state-ok/15 text-state-ok",
-  programada: "bg-state-info/15 text-state-info",
-  ejecutada: "bg-state-ok/15 text-state-ok",
-  retrasada: "bg-state-critica/15 text-state-critica",
+  completada: "bg-state-ok/15 text-state-ok-ink",
+  programada: "bg-state-info/15 text-state-info-ink",
+  ejecutada: "bg-state-ok/15 text-state-ok-ink",
+  retrasada: "bg-state-critica/15 text-state-critica-ink",
   cancelada: "bg-muted text-muted-foreground",
   pausada: "bg-state-warning/15 text-state-warning",
 };
@@ -175,13 +175,14 @@ function CreateTaskModal({
         <div className="space-y-4 px-6 py-5">
           {/* Catalog selector — uses real GET /tareas-catalogo endpoint */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="task-catalogo" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Tipo de tarea
             </label>
             {catalogQuery.isLoading ? (
               <div className="h-11 animate-pulse rounded-[10px] bg-app-surface2" />
             ) : catalogItems.length > 0 ? (
               <select
+                id="task-catalogo"
                 value={catalogId}
                 onChange={(e) => setCatalogId(e.target.value)}
                 className="h-11 w-full rounded-[10px] border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-brand"
@@ -194,7 +195,7 @@ function CreateTaskModal({
                 ))}
               </select>
             ) : (
-              <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/5 px-3 py-3 text-sm text-state-atencion">
+              <div className="rounded-[10px] border border-state-atencion/30 bg-state-atencion/5 px-3 py-3 text-sm text-state-atencion-ink">
                 Sin tipos de tarea en el catálogo. Se usará el primero disponible en el sistema.
               </div>
             )}
@@ -202,10 +203,11 @@ function CreateTaskModal({
 
           {/* Zone selector */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="task-zona" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Zona (opcional)
             </label>
             <select
+              id="task-zona"
               value={zonaId}
               onChange={(e) => setZonaId(e.target.value)}
               className="h-11 w-full rounded-[10px] border border-app-border bg-white px-3 text-sm text-app-text outline-none focus:border-brand"
@@ -219,10 +221,11 @@ function CreateTaskModal({
 
           {/* Scheduled date/time */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="task-fecha" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Fecha y hora planificada *
             </label>
             <input
+              id="task-fecha"
               type="datetime-local"
               value={fechaPlanificada}
               onChange={(e) => setFechaPlanificada(e.target.value)}
@@ -232,10 +235,11 @@ function CreateTaskModal({
 
           {/* Notes */}
           <div>
-            <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
+            <label htmlFor="task-notas" className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-app-dim">
               Observaciones (opcional)
             </label>
             <textarea
+              id="task-notas"
               rows={2}
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
@@ -244,7 +248,7 @@ function CreateTaskModal({
           </div>
 
           {mutation.isError && (
-            <p className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-sm text-state-critica">
+            <p className="rounded-[10px] bg-state-critica/10 px-3 py-2 text-sm text-state-critica-ink">
               {mutation.error.message}
             </p>
           )}

@@ -58,9 +58,9 @@ function formatNumber(value: number | null | undefined, digits = 0) {
 }
 
 function statusClass(status: MetricStatus) {
-  if (status === "critical") return "border-state-critica/30 bg-state-critica/10 text-state-critica";
-  if (status === "warning") return "border-state-atencion/30 bg-state-atencion/10 text-state-atencion";
-  return "border-state-ok/30 bg-state-ok/10 text-state-ok";
+  if (status === "critical") return "border-state-critica/30 bg-state-critica/10 text-state-critica-ink";
+  if (status === "warning") return "border-state-atencion/30 bg-state-atencion/10 text-state-atencion-ink";
+  return "border-state-ok/30 bg-state-ok/10 text-state-ok-ink";
 }
 
 function getMetricValue(metric: MetricKey, lactation?: Lactation) {
@@ -209,7 +209,7 @@ function AnimalQualityCard({ animal, lactation }: { animal: Animal; lactation?: 
         </div>
         <div className="shrink-0 text-center">
           <div className={`flex h-14 w-14 items-center justify-center rounded-full font-heading text-xl font-bold ${
-            score >= 85 ? "bg-state-ok/15 text-state-ok" : "bg-state-atencion/15 text-state-atencion"
+            score >= 85 ? "bg-state-ok/15 text-state-ok-ink" : "bg-state-atencion/15 text-state-atencion-ink"
           }`}>
             {score || "-"}
           </div>
@@ -217,7 +217,7 @@ function AnimalQualityCard({ animal, lactation }: { animal: Animal; lactation?: 
         </div>
       </div>
       {hasWarning && (
-        <div className="flex items-center gap-2 rounded-[10px] bg-state-atencion/15 px-3 py-2 text-xs font-semibold text-state-atencion">
+        <div className="flex items-center gap-2 rounded-[10px] bg-state-atencion/15 px-3 py-2 text-xs font-semibold text-state-atencion-ink">
           <AlertTriangle className="h-3.5 w-3.5" />
           Revisar parámetros de lactación
         </div>

@@ -125,3 +125,16 @@ Los contratos de autorización, idempotencia, conflicto y OpenAPI se cubren en
 `backend/tests/test_alert_resolution.py`; el recorrido accesible, el control
 oculto sin capability y TV read-only se cubren en
 `frontend/playwright/release4-alert-resolution.spec.ts`.
+
+## Alcance R4-5
+
+Matriz E2E determinista de cinco escenarios sintéticos con semilla fijada
+(`small`, seed `20260910`, `backend/app/synthetic_data.py`): `normal`,
+`delayed_tasks`, `health_alert`, `degraded_quality` e `incomplete_data`.
+Cada recorrido demuestra provenance sintética y estados de
+carga/error/vacío/DQ sin confundir ausencia con cero. R3 8/8 sin regresión
+más specs R4 verdes, incluido `release4-scenario-matrix` (5 escenarios +
+barrido axe en viewports móvil/escritorio, cero `serious`/`critical`).
+Detalle, tabla de recorridos y gate reproducible en
+`docs/RELEASE4-R4-5-matriz-e2e.md`. Verificación dorsal en
+`backend/tests/test_r4_scenario_matrix.py`.
