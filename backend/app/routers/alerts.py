@@ -7,9 +7,10 @@ from typing import Annotated
 from app.models.tools4milk import Alerta
 from app.repositories import alerts_repository, animals_repository, tasks_repository
 from app.routers.deps import ClinicalManager, DbSession
-from app.schemas.api import AlertCreate, AlertMutationResponse, AlertsResponse, AlertUpdate
+from app.schemas.api import AlertCreate, AlertMutationResponse, AlertsResponse, AlertStats, AlertUpdate
 from app.security import get_current_user
 from app.services import alerts_service
+from app.time_utils import utc_now
 
 router = APIRouter(prefix="/api/v1", tags=["Frontend Core"], dependencies=[Depends(get_current_user)])
 
@@ -19,22 +20,16 @@ def _alerts_response(
     total: int,
     skip: int,
     limit: int,
+    stats: dict,
     animal_id: str | None = None,
 ) -> AlertsResponse:
-    pending = [a for a in items if a.activa and not a.ts_resolucion]
     return AlertsResponse(
         animal_id=animal_id,
         total=total,
         alertas=[alerts_service.serialize(a) for a in items],
         skip=skip,
         limit=limit,
-        estadisticas={
-            "total_alertas": total,
-            "alertas_ultimos_30_dias": total,
-            "pendientes": len(pending),
-            "tasa_resolucion_pct": 0,
-            "severidad_promedio": "media",
-        },
+        estadisticas=AlertStats(**stats),
     )
 
 
@@ -44,9 +39,11 @@ def critical_alerts(
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AlertsResponse:
+    now = utc_now()
     total = alerts_repository.count_critical(db)
     items = alerts_repository.get_critical(db, skip=skip, limit=limit)
-    return _alerts_response(items, total, skip, limit)
+    stats = alerts_repository.compute_stats(db, critical_only=True, now=now)
+    return _alerts_response(items, total, skip, limit, stats)
 
 
 @router.get("/alerts")
@@ -56,9 +53,11 @@ def list_alerts(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     severidad: str | None = None,
 ) -> AlertsResponse:
+    now = utc_now()
     total = alerts_repository.count_all(db, nivel=severidad)
     items = alerts_repository.get_all(db, skip=skip, limit=limit, nivel=severidad)
-    return _alerts_response(items, skip=skip, limit=limit, total=total)
+    stats = alerts_repository.compute_stats(db, nivel=severidad, now=now)
+    return _alerts_response(items, skip=skip, limit=limit, total=total, stats=stats)
 
 
 @router.post("/alerts", status_code=201)
@@ -149,9 +148,18 @@ def animal_alerts(
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AlertsResponse:
-    total = alerts_repository.count_by_animal(db, animal_id)
-    items = alerts_repository.get_by_animal(db, animal_id, skip=skip, limit=limit)
-    return _alerts_response(items, total, skip, limit, animal_id=animal_id)
+    try:
+        uid = uuid.UUID(animal_id)
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail="animal_id debe ser un UUID válido") from exc
+    animal = animals_repository.get_by_id(db, str(uid))
+    if animal is None:
+        raise HTTPException(status_code=404, detail="Animal no encontrado")
+    now = utc_now()
+    total = alerts_repository.count_by_animal(db, str(uid))
+    items = alerts_repository.get_by_animal(db, str(uid), skip=skip, limit=limit)
+    stats = alerts_repository.compute_stats(db, animal_id=uid, now=now)
+    return _alerts_response(items, total, skip, limit, stats, animal_id=str(uid))
 
 
 @router.post("/alerts/generate/{animal_id}")

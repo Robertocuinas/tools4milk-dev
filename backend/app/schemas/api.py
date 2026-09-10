@@ -61,11 +61,26 @@ class AlertMutationResponse(BaseModel):
     alert: dict[str, Any]
 
 
+class AlertStats(BaseModel):
+    """Estadísticas descriptivas del conjunto filtrado, antes de paginar.
+
+    Agregación exclusivamente descriptiva (R5-RF-08, P2-2); sin lectura
+    clínica ni causal. ``severidad_promedio`` es ``None`` si no hay
+    alertas y nunca es ``"critica"`` (no existe en ``NivelAlerta``).
+    """
+
+    total_alertas: int = Field(ge=0)
+    alertas_ultimos_30_dias: int = Field(ge=0)
+    pendientes: int = Field(ge=0)
+    tasa_resolucion_pct: float = Field(ge=0, le=100)
+    severidad_promedio: Literal["baja", "media", "alta"] | None = None
+
+
 class AlertsResponse(BaseModel):
     animal_id: str | None = None
     total: int
     alertas: list[dict[str, Any]]
-    estadisticas: dict[str, Any] | None = None
+    estadisticas: AlertStats | None = None
     skip: int = 0
     limit: int = 50
 
