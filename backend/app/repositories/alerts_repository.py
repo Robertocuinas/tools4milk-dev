@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.enums import NivelAlerta
@@ -9,16 +9,48 @@ from app.models.tools4milk import Alerta, OperationDedupe
 from app.repositories import tasks_repository
 
 
+def _base_ordering():
+    # Orden determinista: timestamp descendente + id como desempate estable.
+    return (Alerta.ts_generacion.desc(), Alerta.id.desc())
+
+
+def _nivel_filter(nivel: str | None):
+    if nivel is None:
+        return None
+    return Alerta.nivel == _map_nivel(nivel)
+
+
 def get_all(db: Session, skip: int = 0, limit: int = 50, nivel: str | None = None) -> list[Alerta]:
-    query = select(Alerta).order_by(Alerta.ts_generacion.desc())
-    if nivel is not None:
-        query = query.where(Alerta.nivel == _map_nivel(nivel))
+    query = select(Alerta).order_by(*_base_ordering())
+    filt = _nivel_filter(nivel)
+    if filt is not None:
+        query = query.where(filt)
     return list(db.scalars(query.offset(skip).limit(limit)).all())
 
 
-def get_critical(db: Session) -> list[Alerta]:
+def count_all(db: Session, nivel: str | None = None) -> int:
+    query = select(func.count()).select_from(Alerta)
+    filt = _nivel_filter(nivel)
+    if filt is not None:
+        query = query.where(filt)
+    return int(db.scalar(query) or 0)
+
+
+def get_critical(db: Session, skip: int = 0, limit: int = 50) -> list[Alerta]:
     return list(
-        db.scalars(select(Alerta).where(Alerta.nivel.in_([NivelAlerta.ALTA])).order_by(Alerta.ts_generacion.desc())).all()
+        db.scalars(
+            select(Alerta)
+            .where(Alerta.nivel.in_([NivelAlerta.ALTA]))
+            .order_by(*_base_ordering())
+            .offset(skip)
+            .limit(limit)
+        ).all()
+    )
+
+
+def count_critical(db: Session) -> int:
+    return int(
+        db.scalar(select(func.count()).select_from(Alerta).where(Alerta.nivel.in_([NivelAlerta.ALTA]))) or 0
     )
 
 
@@ -29,9 +61,17 @@ def get_by_animal(db: Session, animal_id: str, skip: int = 0, limit: int = 50) -
         return []
     return list(
         db.scalars(
-            select(Alerta).where(Alerta.animal_id == uid).order_by(Alerta.ts_generacion.desc()).offset(skip).limit(limit)
+            select(Alerta).where(Alerta.animal_id == uid).order_by(*_base_ordering()).offset(skip).limit(limit)
         ).all()
     )
+
+
+def count_by_animal(db: Session, animal_id: str) -> int:
+    try:
+        uid = uuid.UUID(animal_id)
+    except (ValueError, AttributeError):
+        return 0
+    return int(db.scalar(select(func.count()).select_from(Alerta).where(Alerta.animal_id == uid)) or 0)
 
 
 def get_by_id(db: Session, alert_id: str) -> Alerta | None:

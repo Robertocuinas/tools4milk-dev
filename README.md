@@ -117,14 +117,15 @@ python scripts/demo.py smoke    # verificación reproducible (health, login, res
 - Detalle operativo, matriz de puertos/URLs y troubleshooting:
   [`OPERATIONS.md`](OPERATIONS.md) y [`docs/RELEASE3.md`](docs/RELEASE3.md).
 
-Release 2 está READY (114 tests backend, 3 specs Playwright + axe);
-Release 3 añade esta demo portable. Todo sintético/ficticio con
+Release 2 está READY (114 tests backend, 3 specs Playwright + axe).
+Release 3 está READY: añade esta demo portable. Todo sintético/ficticio con
 provenance `synthetic/generated`: no PII, no producción.
-Release 4 (en curso, rama de trabajo): DSS sintético — tendencia de calidad
+Release 4 está READY (certificada y publicada en main): DSS sintético — tendencia de calidad
 por animal, resolución de alertas, predicciones granulares + asociación
 meteo descriptiva (no causal), panel operativo admin y matriz E2E de 5
 escenarios (`small`, seed `20260910`); detalle en [`docs/RELEASE4.md`](docs/RELEASE4.md).
-2.4.	Selección tecnológica y diseño de la arquitectura
+
+### Selección tecnológica y diseño de la arquitectura
 La selección del stack tecnológico se fundamentó en criterios de madurez, comunidad, ecosistema de bibliotecas y adecuación a los requisitos del proyecto. Para el backend se eligió Python con el framework FastAPI, por su soporte nativo de programación asíncrona (ASGI), generación automática de documentación OpenAPI/Swagger y validación de datos integrada mediante Pydantic. Para la base de datos se seleccionó PostgreSQL, por su robustez, soporte de tipos JSONB para datos semi-estructurados y amplia comunidad. Para el frontend se eligió Next.js con React, junto con Zustand para la gestión de estado y TanStack Query para la comunicación con la API. El diseño visual se implementó con TailwindCSS.
 
 El sistema adopta una arquitectura monolítica modular desplegada mediante contenedores Docker. A diferencia de aproximaciones basadas en microservicios, se optó por una única aplicación backend que concentra toda la lógica de negocio, simplificando el despliegue y el mantenimiento en el contexto de un MVP. La comunicación entre frontend y backend se realiza exclusivamente a través de una API REST protegida por tokens JWT. La infraestructura de despliegue se orquesta mediante Docker Compose con cinco servicios containerizados: base de datos, backend, frontend, scheduler sintético y proxy inverso.

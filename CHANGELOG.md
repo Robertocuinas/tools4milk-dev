@@ -1,6 +1,6 @@
 # Changelog
 
-## Release 4 — Matriz E2E sintética (R4-5, en curso)
+## Release 4 — Matriz E2E sintética (R4-5, READY)
 
 ### Añadido
 
@@ -12,7 +12,7 @@
 - `docs/RELEASE4-R4-5-matriz-e2e.md` + sección R4-5 en `docs/RELEASE4.md`:
   semilla, matriz, permisos, etiquetas honestas y gate reproducible.
 
-## Release 3 — Demo portable y reproducible (base, en curso)
+## Release 3 — Demo portable y reproducible (base, READY)
 
 ### Añadido
 

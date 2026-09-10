@@ -1,7 +1,8 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Annotated
 
 from app.models.tools4milk import Alerta
 from app.repositories import alerts_repository, animals_repository, tasks_repository
@@ -15,21 +16,21 @@ router = APIRouter(prefix="/api/v1", tags=["Frontend Core"], dependencies=[Depen
 
 def _alerts_response(
     items: list[Alerta],
+    total: int,
     skip: int,
     limit: int,
     animal_id: str | None = None,
 ) -> AlertsResponse:
-    page = items[skip : skip + limit]
     pending = [a for a in items if a.activa and not a.ts_resolucion]
     return AlertsResponse(
         animal_id=animal_id,
-        total=len(items),
-        alertas=[alerts_service.serialize(a) for a in page],
+        total=total,
+        alertas=[alerts_service.serialize(a) for a in items],
         skip=skip,
         limit=limit,
         estadisticas={
-            "total_alertas": len(items),
-            "alertas_ultimos_30_dias": len(items),
+            "total_alertas": total,
+            "alertas_ultimos_30_dias": total,
             "pendientes": len(pending),
             "tasa_resolucion_pct": 0,
             "severidad_promedio": "media",
@@ -38,15 +39,26 @@ def _alerts_response(
 
 
 @router.get("/alerts/critical")
-def critical_alerts(db: DbSession) -> AlertsResponse:
-    items = alerts_repository.get_critical(db)
-    return _alerts_response(items, 0, 50)
+def critical_alerts(
+    db: DbSession,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AlertsResponse:
+    total = alerts_repository.count_critical(db)
+    items = alerts_repository.get_critical(db, skip=skip, limit=limit)
+    return _alerts_response(items, total, skip, limit)
 
 
 @router.get("/alerts")
-def list_alerts(db: DbSession, skip: int = 0, limit: int = 50, severidad: str | None = None) -> AlertsResponse:
-    items = alerts_repository.get_all(db, skip=0, limit=10000, nivel=severidad)
-    return _alerts_response(items, skip, limit)
+def list_alerts(
+    db: DbSession,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    severidad: str | None = None,
+) -> AlertsResponse:
+    total = alerts_repository.count_all(db, nivel=severidad)
+    items = alerts_repository.get_all(db, skip=skip, limit=limit, nivel=severidad)
+    return _alerts_response(items, skip=skip, limit=limit, total=total)
 
 
 @router.post("/alerts", status_code=201)
@@ -131,9 +143,15 @@ def resolve_alert(
 
 
 @router.get("/alerts/{animal_id}")
-def animal_alerts(animal_id: str, db: DbSession, skip: int = 0, limit: int = 50) -> AlertsResponse:
-    items = alerts_repository.get_by_animal(db, animal_id, skip=0, limit=10000)
-    return _alerts_response(items, skip, limit, animal_id=animal_id)
+def animal_alerts(
+    animal_id: str,
+    db: DbSession,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AlertsResponse:
+    total = alerts_repository.count_by_animal(db, animal_id)
+    items = alerts_repository.get_by_animal(db, animal_id, skip=skip, limit=limit)
+    return _alerts_response(items, total, skip, limit, animal_id=animal_id)
 
 
 @router.post("/alerts/generate/{animal_id}")
