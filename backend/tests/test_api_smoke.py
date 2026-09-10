@@ -1,3 +1,5 @@
+import uuid
+
 def test_static_routes_do_not_collide_with_id_routes(client, auth_headers):
     animals_count = client.get("/api/v1/animals/active-count", headers=auth_headers)
     assert animals_count.status_code == 200
@@ -37,11 +39,15 @@ def test_alerts_smoke_flow(client, auth_headers):
 
     updated = client.patch(
         f"/api/v1/alerts/{alert_id}",
-        json={"estado": "revisada", "notas_operario": "Revisada en test"},
-        headers=auth_headers,
+        json={
+            "estado": "resuelta",
+            "notas_operario": "Revisada en test",
+            "expected_version": detailed.json()["version"],
+        },
+        headers={**auth_headers, "X-Operation-Id": str(uuid.uuid4())},
     )
     assert updated.status_code == 200
-    assert updated.json()["estado"] == "revisada"
+    assert updated.json()["alert"]["estado"] == "resuelta"
 
 
 def test_frontend_core_requires_authentication(client):

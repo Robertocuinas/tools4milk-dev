@@ -135,6 +135,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {/* Toast container — fixed, bottom-right, above everything */}
       {toasts.length > 0 && (
         <div
+          role="region"
           aria-label="Notificaciones"
           className="fixed bottom-5 right-5 z-[200] flex flex-col gap-2"
         >

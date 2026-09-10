@@ -96,3 +96,32 @@ El snapshot ejecutable de OpenAPI se valida en
 ejemplos sufficient/insufficient, parámetros acotados). Los recorridos de UI se
 cubren en `frontend/playwright/release4-correlation.spec.ts` con datos
 sintéticos mocados.
+
+## Alcance R4-2
+
+La ruta `/alerts` muestra el listado y estado de las alertas sintéticas, con
+filtros de estado/severidad y estados de carga, error, vacío y desconexión. La
+resolución exige confirmación explícita y solo se muestra a los roles con la
+capability `resolve_alert` (`admin` y `veterinario`). La vista TV continúa
+siendo estrictamente de solo lectura.
+
+### Contrato de resolución
+
+`PATCH /api/v1/alerts/{alert_id}`
+
+- Requiere autenticación y la política clínica existente: `admin` o
+  `veterinario`; los demás roles reciben 403.
+- Exige `X-Operation-Id` UUID y `expected_version` positivo.
+- Devuelve `operation_id`, `replayed` y la alerta versionada resultante.
+- La repetición del mismo actor, operation id y payload devuelve la respuesta
+  almacenada sin aplicar de nuevo la mutación.
+- Reutilizar el operation id con otro payload o enviar una versión obsoleta
+  devuelve 409. La versión actual permanece incluida en el conflicto.
+- El cliente conserva el operation id mientras el diálogo de confirmación siga
+  abierto y no guarda tokens ni identidad en IndexedDB, localStorage o cachés.
+
+La migración `0013_alert_resolution_version.sql` añade el versionado optimista.
+Los contratos de autorización, idempotencia, conflicto y OpenAPI se cubren en
+`backend/tests/test_alert_resolution.py`; el recorrido accesible, el control
+oculto sin capability y TV read-only se cubren en
+`frontend/playwright/release4-alert-resolution.spec.ts`.

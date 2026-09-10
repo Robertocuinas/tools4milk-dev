@@ -10,11 +10,12 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
 import { api, normalizeAlert, normalizeIncident } from "@/lib/api";
+import { usePermissions } from "@/lib/use-permissions";
 import type {
   AlertState,
   CreateIncidentPayload,
@@ -260,9 +261,7 @@ function CreateIncidentModal({
 
 function getNextStatuses(item: UnifiedIncident): UnifiedEstado[] {
   if (item.origen === "alerta") {
-    if (item.estado === "abierta") return ["en_gestion", "resuelta"];
-    if (item.estado === "en_gestion") return ["resuelta", "cerrada"];
-    return [];
+    return item.estado === "abierta" || item.estado === "en_gestion" ? ["resuelta"] : [];
   }
   const machine: Partial<Record<UnifiedEstado, UnifiedEstado[]>> = {
     abierta: ["en_gestion", "resuelta"],
@@ -285,9 +284,10 @@ function UnifiedCard({
   animalLookup: Map<string, string>;
   zoneLookup: Map<string, string>;
 }) {
+  const { can } = usePermissions();
   const [expanded, setExpanded] = useState(false);
   const isUpdating = updatingId === item.id;
-  const available = getNextStatuses(item);
+  const available = item.origen === "alerta" && !can("resolve_alert") ? [] : getNextStatuses(item);
 
   const statusBtnStyle: Record<UnifiedEstado, string> = {
     en_gestion: "bg-state-atencion/15 text-state-atencion hover:bg-state-atencion/25",
@@ -372,7 +372,15 @@ function UnifiedCard({
                   key={next}
                   type="button"
                   disabled={isUpdating}
-                  onClick={() => onStatusChange(item, next)}
+                  onClick={() => {
+                    if (
+                      item.origen === "alerta" &&
+                      !window.confirm("¿Marcar esta alerta sintética como resuelta?")
+                    ) {
+                      return;
+                    }
+                    onStatusChange(item, next);
+                  }}
                   className={`inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-xs font-bold transition disabled:opacity-50 ${statusBtnStyle[next]}`}
                 >
                   {isUpdating ? (
@@ -408,6 +416,7 @@ export default function IncidentsPage() {
   const [prioridadFilter, setPrioridadFilter] = useState<FilterPrioridad>("todas");
   const [showCreate, setShowCreate] = useState(() => searchParams.get("new") === "1");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const alertOperationIds = useRef(new Map<string, string>());
 
   const incidentsQuery = useQuery({
     queryKey: ["incidents"],
@@ -464,11 +473,24 @@ export default function IncidentsPage() {
           : estado === "en_gestion" ? "revisada"
           : estado === "resuelta" ? "resuelta"
           : "falsa_alarma";
-        return api.reviewAlert(item.rawId, { estado: alertEstado });
+        if (alertEstado !== "resuelta") {
+          throw new Error("Las alertas solo se resuelven desde este recorrido seguro.");
+        }
+        if (item.alertVersion === undefined) {
+          throw new Error("La alerta no incluye una versión válida; actualiza la lista e inténtalo de nuevo.");
+        }
+        const operationId = alertOperationIds.current.get(item.id) ?? crypto.randomUUID();
+        alertOperationIds.current.set(item.id, operationId);
+        return api.resolveAlert({ id: item.rawId, version: item.alertVersion }, operationId);
       }
       return api.updateIncident(item.rawId, { estado });
     },
     onMutate: ({ item }) => setUpdatingId(item.id),
+    onSuccess: (_response, { item }) => {
+      if (item.origen === "alerta") {
+        alertOperationIds.current.delete(item.id);
+      }
+    },
     onError: (err: Error) => {
       toast.error(err.message || "Error al actualizar");
     },

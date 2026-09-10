@@ -32,6 +32,8 @@ import type {
   ShiftAssignmentsResponse,
   ShiftHandover,
   ShiftHandoversResponse,
+  SyntheticResetResult,
+  SyntheticSchedulerStatus,
   UnifiedEstado,
   UnifiedIncident,
   UnifiedSeverity,
@@ -42,6 +44,7 @@ import type {
   WeatherCorrelation,
   WeatherData,
   WeatherForecast,
+  WeatherSyncResult,
   Zone,
 } from "@/lib/types";
 
@@ -565,6 +568,30 @@ export const api = {
         fuente: reading.fuente,
       })),
     }));
+  },
+
+  // ── Panel operativo R4-4 (solo admin; endpoints existentes) ────────────────
+  // Scheduler sintético de demostración + sincronización meteorológica.
+  // No hay edición de cron ni colas: solo status/pause/resume/reset/sync.
+
+  syntheticSchedulerStatus() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler");
+  },
+
+  pauseSyntheticScheduler() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler/pause", { method: "POST" });
+  },
+
+  resumeSyntheticScheduler() {
+    return request<SyntheticSchedulerStatus>("/admin/synthetic/scheduler/resume", { method: "POST" });
+  },
+
+  resetSynthetic() {
+    return request<SyntheticResetResult>("/admin/synthetic/reset", { method: "POST" });
+  },
+
+  weatherSync() {
+    return request<WeatherSyncResult>("/weather/sync", { method: "POST" });
   },
 };
 

@@ -557,3 +557,48 @@ export type UnifiedIncident = {
   alertaEstado?: AlertState;
   alertVersion?: number;
 };
+
+// ── Panel operativo R4-4 (scheduler sintético + weather sync, solo admin) ────
+// Contratos 1:1 con GET/POST /api/v1/admin/synthetic/* y POST /api/v1/weather/sync.
+// Solo datos sintéticos de demostración; nunca infraestructura ni secretos.
+
+export type SyntheticSchedulerLastExecution = {
+  started_at: string | null;
+  finished_at: string | null;
+  duration_ms: number | null;
+  created: number | null;
+  skipped: number | null;
+  errors: number | null;
+  error: string | null;
+};
+
+export type SyntheticSchedulerStatus = {
+  paused: boolean;
+  last_execution: SyntheticSchedulerLastExecution;
+  // Presentes solo en respuestas de POST /scheduler/run (no usado por el panel).
+  status?: "ok" | "paused" | "error";
+  created?: number;
+  skipped?: number;
+  errors?: number;
+  duration_ms?: number;
+  finished_at?: string;
+};
+
+export type SyntheticResetResult = {
+  tasks: number;
+  recurrences: number;
+  provenance: number;
+  operation_dedupe: number;
+};
+
+export type WeatherSyncResult = {
+  status: "success" | "error";
+  modo: "generated" | "aemet_real";
+  registros_insertados: number;
+  registros_actualizados: number;
+  error?: string | null;
+  timestamp: string;
+  source?: "generated" | "aemet_real";
+  mode?: "synthetic" | "real";
+  synthetic?: boolean;
+};

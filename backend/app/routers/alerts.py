@@ -1,11 +1,12 @@
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.models.tools4milk import Alerta
-from app.repositories import alerts_repository, animals_repository
+from app.repositories import alerts_repository, animals_repository, tasks_repository
 from app.routers.deps import ClinicalManager, DbSession
-from app.schemas.api import AlertCreate, AlertsResponse, AlertUpdate
+from app.schemas.api import AlertCreate, AlertMutationResponse, AlertsResponse, AlertUpdate
 from app.security import get_current_user
 from app.services import alerts_service
 
@@ -62,13 +63,71 @@ def alert_detail(alert_id: str, db: DbSession) -> dict[str, Any]:
     return alerts_service.serialize(item)
 
 
-@router.patch("/alerts/{alert_id}")
-def review_alert(alert_id: str, payload: AlertUpdate, db: DbSession, _user: ClinicalManager) -> dict[str, Any]:
+@router.patch(
+    "/alerts/{alert_id}",
+    operation_id="resolve_alert",
+    response_model=AlertMutationResponse,
+    responses={
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Se requiere capability resolve_alert"},
+        409: {"description": "Conflicto de versión o de idempotencia"},
+        422: {"description": "Payload u operation id inválido"},
+        428: {"description": "X-Operation-Id obligatorio"},
+    },
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "X-Operation-Id",
+                "in": "header",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+            }
+        ]
+    },
+)
+def resolve_alert(
+    alert_id: str,
+    payload: AlertUpdate,
+    db: DbSession,
+    user: ClinicalManager,
+    operation_id: str | None = Header(default=None, alias="X-Operation-Id", include_in_schema=False),
+) -> dict[str, Any]:
+    if operation_id is None:
+        raise HTTPException(
+            status_code=428,
+            detail={
+                "code": "operation_id_required",
+                "message": "X-Operation-Id es obligatorio para resolver alertas",
+            },
+        )
+    try:
+        parsed_operation_id = uuid.UUID(operation_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "invalid_operation_id", "message": "X-Operation-Id debe ser UUID"},
+        ) from exc
+
     item = alerts_repository.get_by_id(db, alert_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
-    item = alerts_repository.resolve(db, item, payload.model_dump(exclude_none=True))
-    return alerts_service.serialize(item)
+
+    try:
+        response, replayed = alerts_repository.resolve_idempotent(
+            db,
+            item,
+            payload.model_dump(exclude_none=True),
+            user.id,
+            parsed_operation_id,
+            f"/api/v1/alerts/{alert_id}",
+        )
+    except tasks_repository.IdempotencyConflict as exc:
+        db.rollback()
+        status_code = 409 if exc.code in {"stale_version", "operation_payload_mismatch", "invalid_transition"} else 422
+        raise HTTPException(status_code=status_code, detail=exc.payload.get("error", exc.payload)) from exc
+
+    response["replayed"] = replayed
+    return response
 
 
 @router.get("/alerts/{animal_id}")

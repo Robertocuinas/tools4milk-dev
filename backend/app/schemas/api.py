@@ -50,7 +50,7 @@ class AlertCreate(BaseModel):
 
 
 class AlertUpdate(BaseModel):
-    estado: Literal["pendiente", "revisada", "resuelta", "falsa_alarma"] | None = None
+    estado: Literal["resuelta"]
     notas_operario: str | None = None
     expected_version: int = Field(..., gt=0)
 

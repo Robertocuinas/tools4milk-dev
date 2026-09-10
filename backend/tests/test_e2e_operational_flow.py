@@ -61,12 +61,16 @@ def test_operational_e2e_flow(client, auth_headers):
 
     reviewed = client.patch(
         f"/api/v1/alerts/{alert.json()['id']}",
-        headers=auth_headers,
-        json={"estado": "revisada", "notas_operario": "Revisada en flujo E2E"},
+        headers={**auth_headers, "X-Operation-Id": str(uuid.uuid4())},
+        json={
+            "estado": "resuelta",
+            "notas_operario": "Revisada en flujo E2E",
+            "expected_version": alert.json()["version"],
+        },
     )
     assert reviewed.status_code == 200
-    assert reviewed.json()["estado"] == "revisada"
-    assert reviewed.json()["revisada"] is True
+    assert reviewed.json()["alert"]["estado"] == "resuelta"
+    assert reviewed.json()["alert"]["revisada"] is True
 
     persisted_incident = client.get(f"/api/v1/incidents/{incident.json()['id']}", headers=auth_headers)
     assert persisted_incident.status_code == 200
