@@ -7,14 +7,15 @@ PowerShell ni OpenSSL.
 
 Uso:
     python scripts/demo.py init [--force]
-    python scripts/demo.py up [--build] [--timeout N]
-    python scripts/demo.py status
+    python scripts/demo.py up [--build] [--timeout N] [--project-name NAME]
+    python scripts/demo.py status [--project-name NAME]
     python scripts/demo.py smoke [--timeout N]
-    python scripts/demo.py reset [--yes]
-    python scripts/demo.py down [--volumes] [--yes]
+    python scripts/demo.py reset [--yes] [--project-name NAME]
+    python scripts/demo.py down [--volumes] [--yes] [--project-name NAME]
 
-Proyecto Compose canónico y aislado: ``tfm_r3_demo``. Ningún comando toca
-recursos de otros proyectos.
+Proyecto Compose canónico y aislado por defecto: ``tfm_r3_demo``
+(override explícito con ``--project-name``, ej.: ``tfm_r5_demo``).
+Ningún comando toca recursos de otros proyectos.
 
 Secretos: `init` genera `.env` local con valores aleatorios (módulo
 ``secrets``) y es idempotente: no sobrescribe un `.env` existente sin
@@ -27,6 +28,7 @@ import argparse
 import http.cookiejar
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -39,6 +41,8 @@ import urllib.request
 from pathlib import Path
 
 COMPOSE_PROJECT = "tfm_r3_demo"
+DEFAULT_COMPOSE_PROJECT = COMPOSE_PROJECT
+PROJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]+$")
 COMPOSE_FILE = "docker-compose.yml"
 ENV_EXAMPLE = ".env.example"
 ENV_FILE = ".env"
@@ -231,12 +235,40 @@ def cmd_init(root: Path, force: bool, dry_run: bool) -> int:
     return 0
 
 
-def compose_base() -> list[str]:
-    return ["docker", "compose", "-p", COMPOSE_PROJECT, "-f", COMPOSE_FILE]
+def validate_project_name(name: str) -> str:
+    """Valida el nombre como identificador Compose seguro (sin shell).
+
+    Acepta `[a-z0-9_-]+` empezando por alfanumérico (ej.: tfm_r5_demo).
+    Rechaza vacíos, espacios y caracteres de shell. No registra secretos.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("nombre de proyecto vacío: usa --project-name tfm_r5_demo")
+    if not PROJECT_NAME_RE.match(name):
+        raise ValueError(
+            f"nombre de proyecto inválido {name!r}: "
+            "usa solo minúsculas, dígitos, guion y subrayado "
+            "(ej.: tfm_r5_demo)"
+        )
+    return name
 
 
-def cmd_up(root: Path, build: bool, timeout_s: int, dry_run: bool) -> int:
-    cmd = compose_base() + ["up", "-d"] + (["--build"] if build else [])
+def compose_base(project_name: str | None = None) -> list[str]:
+    name = project_name if project_name is not None else DEFAULT_COMPOSE_PROJECT
+    validate_project_name(name)
+    return ["docker", "compose", "-p", name, "-f", COMPOSE_FILE]
+
+
+def cmd_up(
+    root: Path,
+    build: bool,
+    timeout_s: int,
+    dry_run: bool,
+    project_name: str | None = None,
+) -> int:
+    name = validate_project_name(
+        DEFAULT_COMPOSE_PROJECT if project_name is None else project_name
+    )
+    cmd = compose_base(name) + ["up", "-d"] + (["--build"] if build else [])
     if dry_run:
         run(cmd, cwd=root, dry_run=True)
         return 0
@@ -257,7 +289,7 @@ def cmd_up(root: Path, build: bool, timeout_s: int, dry_run: bool) -> int:
         print(
             "ERROR: el backend no respondió `/health` a tiempo. "
             "Diagnóstico: `python scripts/demo.py status` y "
-            "`docker compose -p tfm_r3_demo logs backend`.",
+            f"`docker compose -p {name} logs backend`.",
             file=sys.stderr,
         )
         return 1
@@ -265,8 +297,13 @@ def cmd_up(root: Path, build: bool, timeout_s: int, dry_run: bool) -> int:
     return 0
 
 
-def cmd_status(root: Path, dry_run: bool) -> int:
-    proc = run(compose_base() + ["ps"], cwd=root, dry_run=dry_run)
+def cmd_status(
+    root: Path, dry_run: bool, project_name: str | None = None
+) -> int:
+    name = validate_project_name(
+        DEFAULT_COMPOSE_PROJECT if project_name is None else project_name
+    )
+    proc = run(compose_base(name) + ["ps"], cwd=root, dry_run=dry_run)
     if proc.returncode != 0:
         return proc.returncode
     if dry_run:
@@ -387,8 +424,16 @@ def confirm(prompt: str, assume_yes: bool) -> bool:
     return answer in {"s", "si", "sí", "y", "yes"}
 
 
-def cmd_reset(root: Path, assume_yes: bool, dry_run: bool) -> int:
+def cmd_reset(
+    root: Path,
+    assume_yes: bool,
+    dry_run: bool,
+    project_name: str | None = None,
+) -> int:
     """Reset sintético vía API (no destruye volúmenes ni esquema)."""
+    name = validate_project_name(
+        DEFAULT_COMPOSE_PROJECT if project_name is None else project_name
+    )
     if dry_run:
         print("[dry-run] POST /api/v1/admin/synthetic/reset")
         return 0
@@ -396,7 +441,7 @@ def cmd_reset(root: Path, assume_yes: bool, dry_run: bool) -> int:
         print(f"ERROR: {problem}", file=sys.stderr)
         return 2
     if not confirm(
-        "Resetear SOLO filas sintéticas del proyecto tfm_r3_demo", assume_yes
+        f"Resetear SOLO filas sintéticas del proyecto {name}", assume_yes
     ):
         print("Cancelado.")
         return 0
@@ -426,26 +471,35 @@ def cmd_reset(root: Path, assume_yes: bool, dry_run: bool) -> int:
     return 0
 
 
-def cmd_down(root: Path, volumes: bool, assume_yes: bool, dry_run: bool) -> int:
+def cmd_down(
+    root: Path,
+    volumes: bool,
+    assume_yes: bool,
+    dry_run: bool,
+    project_name: str | None = None,
+) -> int:
+    name = validate_project_name(
+        DEFAULT_COMPOSE_PROJECT if project_name is None else project_name
+    )
     if dry_run:
         run(
-            compose_base() + ["down"] + (["-v"] if volumes else []),
+            compose_base(name) + ["down"] + (["-v"] if volumes else []),
             cwd=root,
             dry_run=True,
         )
         return 0
     if volumes and not confirm(
-        "BORRAR también los volúmenes del proyecto tfm_r3_demo (datos demo)",
+        f"BORRAR también los volúmenes del proyecto {name} (datos demo)",
         assume_yes,
     ):
         print("Cancelado.")
         return 0
-    cmd = compose_base() + ["down"] + (["-v"] if volumes else [])
+    cmd = compose_base(name) + ["down"] + (["-v"] if volumes else [])
     proc = run(cmd, cwd=root, dry_run=dry_run)
     if proc.returncode != 0:
         print("ERROR: `compose down` falló.", file=sys.stderr)
         return 1
-    print("Stack tfm_r3_demo apagado" + (" (con volúmenes)" if volumes else "") + ".")
+    print(f"Stack {name} apagado" + (" (con volúmenes)" if volumes else "") + ".")
     return 0
 
 
@@ -464,12 +518,25 @@ def wait_for_health(timeout_s: int) -> bool:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="demo.py",
-        description="CLI portable de la demo Tools4Milk (proyecto tfm_r3_demo).",
+        description=(
+            "CLI portable de la demo Tools4Milk "
+            f"(proyecto {DEFAULT_COMPOSE_PROJECT} por defecto; "
+            "usa --project-name para aislar otro proyecto, ej.: tfm_r5_demo)."
+        ),
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Muestra lo que haría sin ejecutar cambios.",
+    )
+    parser.add_argument(
+        "--project-name",
+        default=DEFAULT_COMPOSE_PROJECT,
+        help=(
+            "Nombre del proyecto Compose "
+            f"(por defecto: {DEFAULT_COMPOSE_PROJECT}). "
+            "Ej.: --project-name tfm_r5_demo."
+        ),
     )
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
@@ -477,6 +544,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=argparse.SUPPRESS,
         help="Muestra lo que haría sin ejecutar cambios.",
+    )
+    common.add_argument(
+        "--project-name",
+        default=argparse.SUPPRESS,
+        help=(
+            "Nombre del proyecto Compose "
+            f"(por defecto: {DEFAULT_COMPOSE_PROJECT}). "
+            "Ej.: --project-name tfm_r5_demo."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -515,18 +591,42 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = repo_root()
     dry_run: bool = args.dry_run
+    try:
+        project_name = validate_project_name(
+            getattr(args, "project_name", DEFAULT_COMPOSE_PROJECT)
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     if args.command == "init":
         return cmd_init(root, force=args.force, dry_run=dry_run)
     if args.command == "up":
-        return cmd_up(root, build=args.build, timeout_s=args.timeout, dry_run=dry_run)
+        return cmd_up(
+            root,
+            build=args.build,
+            timeout_s=args.timeout,
+            dry_run=dry_run,
+            project_name=project_name,
+        )
     if args.command == "status":
-        return cmd_status(root, dry_run=dry_run)
+        return cmd_status(root, dry_run=dry_run, project_name=project_name)
     if args.command == "smoke":
         return cmd_smoke(root, timeout_s=args.timeout, dry_run=dry_run)
     if args.command == "reset":
-        return cmd_reset(root, assume_yes=args.yes, dry_run=dry_run)
+        return cmd_reset(
+            root,
+            assume_yes=args.yes,
+            dry_run=dry_run,
+            project_name=project_name,
+        )
     if args.command == "down":
-        return cmd_down(root, volumes=args.volumes, assume_yes=args.yes, dry_run=dry_run)
+        return cmd_down(
+            root,
+            volumes=args.volumes,
+            assume_yes=args.yes,
+            dry_run=dry_run,
+            project_name=project_name,
+        )
     parser.print_help()
     return 2
 
