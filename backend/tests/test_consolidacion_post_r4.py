@@ -5,9 +5,28 @@
 """
 
 import uuid
+from datetime import date
 
-from app.models.tools4milk import LecturaMeteo
+from app.models.tools4milk import Animal, LecturaMeteo
 from app.time_utils import utc_now
+
+
+def _make_animal(db, crotal: str) -> Animal:
+    animal = Animal(
+        id=uuid.uuid4(),
+        crotal_oficial=crotal,
+        nombre="Animal sintético consolidación",
+        sexo="hembra",
+        fecha_nacimiento=date(2021, 1, 1),
+        raza="frisona",
+        estado="produccion",
+        estado_reproductivo="vacia",
+        fecha_entrada=date(2021, 1, 1),
+    )
+    db.add(animal)
+    db.commit()
+    db.refresh(animal)
+    return animal
 
 
 def _mk_alert(animal_id: str, idx: int) -> dict:
@@ -59,8 +78,9 @@ class TestAlertsPaginationSQL:
         assert client.get("/api/v1/alerts", params={"skip": -1}, headers=auth_headers).status_code == 422
         assert client.get("/api/v1/alerts", params={"limit": 0}, headers=auth_headers).status_code == 422
 
-    def test_by_animal_pagination(self, client, auth_headers):
-        animal = str(uuid.uuid4())
+    def test_by_animal_pagination(self, client, db, auth_headers):
+        # R5 P2-1: el animal debe existir (404 si no, 422 si no es UUID).
+        animal = str(_make_animal(db, "CONS-PAG-001").id)
         for i in range(3):
             r = client.post("/api/v1/alerts", json=_mk_alert(animal, i), headers=auth_headers)
             assert r.status_code == 201

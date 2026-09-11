@@ -76,7 +76,7 @@ export type AlertsResponse = {
     alertas_ultimos_30_dias: number;
     pendientes: number;
     tasa_resolucion_pct: number;
-    severidad_promedio: string;
+    severidad_promedio: string | null;
   };
 };
 
