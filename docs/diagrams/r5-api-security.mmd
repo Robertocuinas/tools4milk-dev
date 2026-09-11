@@ -1,0 +1,52 @@
+%% TOOLS4MILK R5 — Vista API y seguridad (R5-RF-02).
+%% Autenticacion JWT en cookies HttpOnly; /health publico es la excepcion.
+%% Fuentes: backend/app/main.py, backend/app/security.py,
+%%          backend/app/routers/deps.py, backend/app/routers/auth.py,
+%%          backend/app/routers/health.py, backend/app/routers/weather.py,
+%%          backend/app/routers/predictions.py, backend/app/routers/zones.py,
+%%          backend/app/routers/admin.py, backend/app/routers/synthetic_scheduler.py,
+%%          docs/RELEASE3.md.
+flowchart TB
+    subgraph CLIENTE["Navegador"]
+        BROWSER["Next.js<br/>sin JWT en storage<br/>cookies HttpOnly"]
+    end
+
+    subgraph AUTH["Sesion (Auth)"]
+        LOGIN["POST /api/v1/auth/login<br/>rate-limit 429 por IP"]
+        ME["GET /api/v1/auth/me<br/>sesion activa"]
+        REFRESH["POST /api/v1/auth/refresh<br/>rotacion + reuse detection"]
+    end
+
+    subgraph API["FastAPI /api/v1 (dominio autenticado)"]
+        HEALTHPUB["GET /health<br/>PUBLICO liveness<br/>excepcion sin auth"]
+        HEALTHDB["GET /api/v1/health/db<br/>solo admin<br/>401 sin credencial, 403 otro rol"]
+        WEATHERR["GET /api/v1/weather/current|readings|historical|correlation/impact<br/>WeatherReader: admin, veterinario,<br/>operario, alimentacion<br/>aviso: descriptivo sintetico, no causal"]
+        WEATHERSYNC["POST /api/v1/weather/sync<br/>solo admin (AdminOnly)<br/>AEMET opt-in o fallback generated"]
+        PRED["GET /api/v1/predictions/*<br/>admin, veterinario, alimentacion<br/>heuristica aritmetica, no ML"]
+        ZONESR["GET /api/v1/zones*, /boxes-recria<br/>autenticado (TV solo lectura)"]
+        ZONESW["POST|PUT /api/v1/zones/*<br/>solo admin"]
+        SYNTH["/api/v1/admin/synthetic/*<br/>solo admin, deshabilitado en production<br/>scheduler run|pause|resume, reset"]
+        SEED["POST /api/v1/admin/seed-data<br/>solo admin, deshabilitado en production"]
+    end
+
+    subgraph COOKIES["Credenciales"]
+        C1["cookie t4m_token<br/>HttpOnly SameSite Lax 8 h (480 min)"]
+        C2["cookie t4m_refresh<br/>HttpOnly SameSite Strict 30 d<br/>tabla refresh_tokens, max 5 por usuario"]
+    end
+
+    BROWSER -- "1. login<br/>usuario + password demo" --> LOGIN
+    LOGIN -- "2. emite<br/>access + refresh" --> COOKIES
+    COOKIES -- "3. envia automatico<br/>Cookie en cada request" --> BROWSER
+    BROWSER -- "pide sin auth<br/>liveness" --> HEALTHPUB
+    BROWSER -- "pide con cookie<br/>GET /auth/me" --> ME
+    BROWSER -- "renueva<br/>refresh" --> REFRESH
+    BROWSER -- "lee autenticado<br/>GET" --> WEATHERR
+    BROWSER -- "lee autenticado<br/>GET" --> PRED
+    BROWSER -- "lee autenticado<br/>GET" --> ZONESR
+    BROWSER -- "diagnostica admin<br/>GET" --> HEALTHDB
+    BROWSER -- "sincroniza admin<br/>POST" --> WEATHERSYNC
+    BROWSER -- "escribe admin<br/>POST|PUT" --> ZONESW
+    BROWSER -- "opera admin<br/>POST|GET" --> SYNTH
+    BROWSER -- "siembra admin<br/>POST" --> SEED
+
+    SEED -.- SYNTH

@@ -1,6 +1,16 @@
 # TOOLS4MILK — Release 5 (R5): documentación versionada y reproducible
 
-Estado: `IN_PROGRESS` (no READY, sin certificación).
+Estado: `READY_LOCAL_FOR_INDEPENDENT_AUDIT` (ensamblaje local verificado,
+pendiente de auditoría independiente en `t_e5c6c288`). No es despliegue
+productivo ni validación clínica/científica.
+
+Ensamblaje: rama local `r5-final-assembly-local` sobre el
+`integration_commit` `1821920` (`t_0b8bfd17`), con merges completos
+trazables `--no-ff` de `6aabd81` (código certificado: `29306df` demo
+`--project-name` + fix AA TaskCard), `1817954` (evidencia, `t_619a5398`) y
+`ebc2298` (limitaciones/manual, `t_353377d3`). Sin cherry-pick, reset,
+squash ni push/tag/PR/deploy. Commit de ensamblaje: ver historial de la
+rama (merge de actualización de este fichero y la matriz).
 
 ## 1. Propósito
 
@@ -79,15 +89,71 @@ certificación de despliegue productivo) sigue vigente.
 
 ## 6. Documentos R5
 
-- `docs/RELEASE5.md` (este fichero): propósito, límites, alcance y exclusiones.
+- `docs/RELEASE5.md` (este fichero): propósito, límites, alcance, estado de
+  ensamblaje y exclusiones.
 - `docs/R5_REQUIREMENTS_TRACEABILITY.md`: matriz de requisitos con IDs
-  estables y gates de verificación.
-- Pendientes de crear en fases posteriores: diagramas, evidencia reejecutada,
-  capítulo de limitaciones, manual de demo.
+  estables, estados verificados y gates de verificación.
+- `docs/R5_ARCHITECTURE.md` + `docs/diagrams/r5-*.mmd` (4 vistas Mermaid:
+  contexto, contenedores, API/seguridad, datos sintéticos).
+- `docs/R5_SYNTHETIC_METHODOLOGY_SCENARIOS.md`: metodología del generador +
+  catálogo unificado de nueve escenarios.
+- `docs/R5_REPRODUCIBLE_EVIDENCE.md`: evidencia reejecutable (gate vigente
+  `t_ca2dc8bf` READY 8/8 x2 + Axe 0/0 sobre `6aabd81`; antecedente histórico
+  `t_712c60bc` NOT_READY 4/1/3).
+- `docs/R5_LIMITATIONS_VALIDITY_REPRODUCIBILITY.md`: limitaciones, amenazas
+  a la validez y reproducibilidad.
+- `docs/R5_DEMONSTRATION_MANUAL.md`: manual de demostración (serie
+  `tfm_r5_demo`).
 
-## 7. Verificación prevista
+## 7. Verificación ejecutada (árbol ensamblado, sin Docker ni repetición E2E)
 
-Cada requisito de la matriz define su propio gate (tests, comandos o revisión
-documental). A nivel de esta fase: enlaces Markdown internos válidos,
-referencias a rutas existentes y `git diff --check` limpio. No se afirma
-certificación ni estado READY.
+Gates no-Docker reejecutados sobre este árbol (código idéntico a `6aabd81`;
+solo difieren 3 ficheros `docs/` nuevos):
+
+- Backend: `python -m pytest backend/tests -q` → **205 passed**.
+- CLI demo: `python -m pytest tests/test_demo_cli.py -q` → **9 passed**.
+- OpenAPI: doble dump `/openapi.json` idéntico (len 72740 x2) +
+  `/docs`, `/redoc`, `/openapi.json` 200.
+- Frontend: `tsc --noEmit` exit 0; `eslint .` limpio.
+- Gate estático portable: `npx playwright test
+  release1-smoke-portable.static.spec.ts --workers=1` → **4/4**.
+- Metodología RF-03: `generate_synthetic.py --help` OK (9 escenarios) +
+  `test_r4_scenario_matrix.py` → **10 passed**.
+- `git diff --check` limpio; scan de secretos/PII limpio (sin valores
+  reales; solo `[REDACTED]`/placeholders); legacy `e2e/release1-smoke.mjs`
+  intacto (sin diff vs `68132c2`, último cambio `d4e97bf`); enlaces
+  Markdown internos válidos (123 revisados; 6 falsos positivos de formato
+  `fichero:línea` y relativo mismo-directorio, todos resuelven); 4 `.mmd`
+  con cabecera `graph`/`flowchart`.
+
+Evidencia E2E vigente (no reejecutada aquí por alcance; ver
+`docs/R5_REPRODUCIBLE_EVIDENCE.md`): `t_ca2dc8bf` READY contra
+`tfm_r5_demo` en `6aabd81` — run_1 8/8 (1.3 min), run_2 8/8 (2.9 min), 0
+skips, Axe 0 serious / 0 critical, preflight 5/5 healthy, gate estático
+4/4. Historial honesto: `t_712c60bc` NOT_READY (4/1/3, contraste 4.48
+TaskCard) → fix `t_a9341392` (`6aabd81`) → rebuild `t_e6b7a3ed` →
+recertificación.
+
+Limpieza demo: `t_67896b8b` CLEAN — `tfm_r5_demo` desmontado vía flujo
+oficial (`down --project-name tfm_r5_demo`), verificado vacío total (0
+contenedores, sin red, `/health` sin respuesta); volumen
+`tfm_r5_demo_postgres_data` persiste por diseño (datos sintéticos).
+
+## 8. Riesgos residuales y notas de honestidad
+
+- Documentos de handoff (`R5_ARCHITECTURE.md`, limitaciones, manual)
+  conservan cabeceras de trabajo con `IN_PROGRESS`; el estado vigente es el
+  de este fichero + la matriz. No se editaron por límite de alcance del
+  ensamblaje (solo este fichero y la matriz).
+- Vista de contenedores cita el proyecto `tfm_r3_demo` (nombre por defecto
+  vigente); la serie R5 usa `--project-name tfm_r5_demo` (ver manual).
+- Mermaid validado por estructura (cabeceras, referencias), sin render
+  ejecutable.
+- Pool de tareas demo parcialmente consumido por las 2 corridas (1 PUT
+  válido/corrida); reintento-429 puede introducir esperas de ~65 s en
+  ejecuciones adyacentes.
+- Filtros de severidad inválida conservan mapeo legacy a `media`.
+- Longitud del dump OpenAPI medida aquí (72740) difiere de la citada en la
+  integración (78395) por formato de serialización; el código es idéntico a
+  `6aabd81` y ambos dumps son byte-idénticos entre sí.
+- R6 excluida. Sin dependencias, migraciones ni acciones remotas nuevas.

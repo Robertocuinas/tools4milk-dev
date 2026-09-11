@@ -12,10 +12,10 @@ interface TaskCardProps {
 }
 
 const stateColors = {
-  programada: "bg-state-info/10 border-state-info/30 text-state-info",
-  retrasada: "bg-state-critica/10 border-state-critica/30 text-state-critica",
+  programada: "bg-state-info/10 border-state-info/30 text-state-info-ink",
+  retrasada: "bg-state-critica/10 border-state-critica/30 text-state-critica-ink",
   pausada: "bg-brand/10 border-brand/30 text-brand",
-  ejecutada: "bg-state-ok/10 border-state-ok/30 text-state-ok",
+  ejecutada: "bg-state-ok/10 border-state-ok/30 text-state-ok-ink",
   cancelada: "bg-app-bg border-app-border text-app-dim",
 };
 
@@ -52,7 +52,7 @@ export function TaskCard({
               {task.tarea_catalogo?.nombre ?? "Tarea"}
             </p>
             {task.zona_id && (
-              <p className="text-xs text-app-dim mt-1">
+              <p className="text-xs mt-1">
                 Zona: {task.zona_id}
               </p>
             )}
@@ -63,7 +63,7 @@ export function TaskCard({
         </div>
 
         {!isCompact && (
-          <div className="space-y-1 text-xs text-app-dim">
+          <div className="space-y-1 text-xs">
             {task.fecha_programada && (
               <p>
                 {new Date(task.fecha_programada).toLocaleString("es-ES", {
@@ -84,7 +84,7 @@ export function TaskCard({
           </div>
         )}
 
-        <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-app-dim">
+        <div className="text-[10px] font-bold uppercase tracking-[0.1em]">
           {task.estado}
         </div>
       </div>

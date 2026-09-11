@@ -1,9 +1,14 @@
 # TOOLS4MILK — R5: matriz de requisitos y trazabilidad
 
-Estado global R5: `IN_PROGRESS` (ver `docs/RELEASE5.md`). Ningún requisito de
-este documento está realizado hasta que su gate de verificación se ejecute y se
-registre como evidencia reejecutable. Lo citado como existente es estado
-inicial auditado sobre `main` en `3741c18`, no trabajo R5 completado.
+Estado global R5: `READY_LOCAL_FOR_INDEPENDENT_AUDIT` (ver
+`docs/RELEASE5.md` §7–§8). Ensamblaje local `r5-final-assembly-local`:
+base `1821920` (`t_0b8bfd17`) + merges `--no-ff` de `6aabd81` (código
+certificado), `1817954` (evidencia, `t_619a5398`) y `ebc2298`
+(limitaciones/manual, `t_353377d3`). Cada requisito abajo indica su estado
+verificado con evidencia real; el gate E2E vigente es `t_ca2dc8bf` (READY
+8/8 x2, Axe 0/0, sobre `6aabd81`); `t_712c60bc` queda como antecedente
+histórico NOT_READY. Limpieza `tfm_r5_demo` verificada (`t_67896b8b`
+CLEAN).
 
 Convención evidencial usada en todo el documento:
 
@@ -32,6 +37,9 @@ Convención evidencial usada en todo el documento:
   P2 como corrección pendiente, sin marcar realizado lo inexistente.
 - Gate previsto: revisión documental (enlaces Markdown internos válidos,
   rutas referenciadas existentes, `git diff --check` limpio).
+- Estado R5: **verificado**. Evidencia de ensamblaje: ambos documentos
+  existen en español con grafía TOOLS4MILK; 123 enlaces/rutas revisados
+  (resuelven), `git diff --check` limpio, 4 `.mmd` con cabecera válida.
 
 ## R5-RF-02 — Diagramas de arquitectura versionados
 
@@ -51,6 +59,10 @@ Convención evidencial usada en todo el documento:
   diagrama traza a un fichero/endpoint/contrato real citado.
 - Gate previsto: revisión documental cruzada contra código + `git diff
   --check`.
+- Estado R5: **verificado**. Evidencia: `74f6037` integrado en `1821920`
+  (`t_0b8bfd17`); 4 vistas en `docs/diagrams/r5-*.mmd` con cabecera
+  `graph`/`flowchart`, elementos trazados a ficheros/contratos reales.
+  Residual: sin render ejecutable de Mermaid.
 
 ## R5-RF-03 — Metodología del generador y catálogo académico unificado
 
@@ -74,6 +86,10 @@ Convención evidencial usada en todo el documento:
 - Gate previsto (reejecutable): `python backend/scripts/generate_synthetic.py
   --help` y `python -m pytest backend/tests/test_r4_scenario_matrix.py -q`
   con resultados registrados como evidencia R5.
+- Estado R5: **verificado**. Evidencia: `88b0e18` integrado en `1821920`;
+  capítulo `docs/R5_SYNTHETIC_METHODOLOGY_SCENARIOS.md` con catálogo de 9
+  escenarios; reejecutado en ensamblaje: `--help` OK (9 escenarios
+  listados), `test_r4_scenario_matrix.py` **10 passed**.
 
 ## R5-RF-04 — Evidencia versionada reejecutable
 
@@ -95,6 +111,10 @@ Convención evidencial usada en todo el documento:
   resumida, hash donde aplique y fecha; ninguna evidencia es solo histórica.
 - Gate previsto (reejecutable): la propia batería citada en
   `R5-RNF-02`, con salidas archivadas en el documento de evidencias R5.
+- Estado R5: **verificado**. Evidencia: `docs/R5_REPRODUCIBLE_EVIDENCE.md`
+  (`1817954`, `t_619a5398`); gate vigente `t_ca2dc8bf` READY (run_1 8/8,
+  run_2 8/8, Axe 0/0, sobre `6aabd81`); `t_712c60bc` citado solo como
+  antecedente NOT_READY.
 
 ## R5-RF-05 — Capítulo consolidado de limitaciones y reproducibilidad
 
@@ -117,6 +137,11 @@ Convención evidencial usada en todo el documento:
   ejecutable paso a paso.
 - Gate previsto: revisión documental + reproducción mínima
   (`git diff --check` y, donde aplique, comandos de `R5-RNF-02`).
+- Estado R5: **verificado**. Evidencia:
+  `docs/R5_LIMITATIONS_VALIDITY_REPRODUCIBILITY.md` (`ebc2298`,
+  `t_353377d3`); cubre sintéticos, heurística no causal, cobertura
+  READY recertificada, AEMET opt-in, E2E+accesibilidad, amenazas y
+  repetición; revisión documental OK en ensamblaje.
 
 ## R5-RF-06 — Manual de demostración
 
@@ -133,6 +158,12 @@ Convención evidencial usada en todo el documento:
 - Criterio de aceptación: un tercero sigue el manual sobre `main` limpio y
   completa la demo sin improvisar pasos ni usar secretos.
 - Gate previsto: recorrido manual del guion + `git diff --check`.
+- Estado R5: **verificado**. Evidencia:
+  `docs/R5_DEMONSTRATION_MANUAL.md` (`ebc2298`, `t_353377d3`); 9 secciones
+  (preparación, arranque `tfm_r5_demo`, credenciales efímeras, RBAC,
+  sintéticos, secuencia 20 min, observable vs no afirmar, gate sin
+  secretos, teardown); comandos contrastados contra el repo en el handoff;
+  sin secretos.
 
 ## R5-RF-07 — Corrección P2-1: contrato coherente de alertas por animal
 
@@ -170,6 +201,9 @@ Convención evidencial usada en todo el documento:
   animal existente sin alertas.
 - Gate previsto (reejecutable): tests backend nuevos/actualizados
   (`python -m pytest backend/tests -q`) más revisión del diff del contrato.
+- Estado R5: **verificado**. Evidencia: `231acab` integrado en `1821920`
+  (`t_0b8bfd17`); suite `backend/tests/test_alerts_r5_p2.py` incluida en
+  los **205 passed** reejecutados en ensamblaje (contrato 404/422/200).
 
 ## R5-RF-08 — Corrección P2-2: estadísticas de alertas calculadas
 
@@ -220,6 +254,9 @@ Convención evidencial usada en todo el documento:
   el repositorio con el mismo alcance.
 - Gate previsto (reejecutable): tests backend con datos sembrados que
   afirmen cada campo por separado (`python -m pytest backend/tests -q`).
+- Estado R5: **verificado**. Evidencia: `231acab` integrado en `1821920`
+  (agregación SQL pre-paginación); campos afirmados por tests dedicados
+  dentro de los **205 passed** reejecutados en ensamblaje.
 
 ## R5-RF-09 — Corrección P2-3: spec E2E portable en sustitución del legacy
 
@@ -253,6 +290,12 @@ Convención evidencial usada en todo el documento:
   demostración local más `grep` de ausencia de literales
   (`host.docker.internal`, `testpass123`, `/tmp/`, `cdnjs`) en el nuevo
   fichero. Sin Docker ni acciones remotas en esta fase documental.
+- Estado R5: **verificado, gate integrado listo**. Evidencia: spec
+  `frontend/playwright/release1-smoke-portable.spec.ts` (`14d7950`,
+  serial/pacing/contrato mutación) integrado en `1821920`; gate estático
+  **4/4** reejecutado en ensamblaje; gate vigente `t_ca2dc8bf` READY
+  (run_1 8/8, run_2 8/8, 0 skips, Axe 0/0 sobre `6aabd81`); legacy
+  `e2e/release1-smoke.mjs` conservado intacto (último cambio `d4e97bf`).
 
 ## R5-RNF-01 — Restricciones transversales
 
@@ -267,6 +310,10 @@ Convención evidencial usada en todo el documento:
 - Criterio de aceptación: ningún diff R5 introduce lo prohibido; el nombre
   del proyecto aparece siempre como TOOLS4MILK.
 - Gate previsto: `git diff --check` + revisión del diff por fichero.
+- Estado R5: **verificado**. Evidencia de ensamblaje: diff acotado a
+  `docs/` (+3 ficheros de merges, +2 editados); sin dependencias,
+  proveedores, migraciones, Redis/Celery/TimescaleDB/S3/ML/WebSocket/SSE ni
+  cambios de despliegue; español y grafía TOOLS4MILK en todo R5.
 
 ## R5-RNF-02 — Honestidad evidencial (histórico vs reejecutable)
 
@@ -289,6 +336,12 @@ Convención evidencial usada en todo el documento:
 - Criterio de aceptación: cada documento R5 posterior distingue lo
   histórico de lo reejecutable con comandos, salidas y fechas.
 - Gate previsto: revisión documental de cada entrega contra esta regla.
+- Estado R5: **verificado**. Evidencia de ensamblaje: la evidencia
+  (`1817954`) rotula `t_712c60bc` como antecedente no vigente y `t_ca2dc8bf`
+  como vigente; limitaciones/manual declaran historial NOT_READY→fix→
+  recertificación; este fichero y `RELEASE5.md` §8 recogen riesgos
+  residuales sin maquillaje; batería R5-RNF-02 reejecutada (backend 205,
+  demo CLI 9, tsc/lint, static 4/4, OpenAPI determinista, diff-check).
 
 ## Dependencias
 
