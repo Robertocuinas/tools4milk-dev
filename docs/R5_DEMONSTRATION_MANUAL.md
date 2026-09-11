@@ -1,10 +1,12 @@
 # TOOLS4MILK — R5: manual de demostración y presentación
 
 Estado R5: `IN_PROGRESS`. Manual operativo y académico en español. No es
-certificación: el gate E2E R5 cerró `NOT_READY` (`t_712c60bc`: 4 passed /
-1 failed / 3 no ejecutados por contraste TaskCard, §7). Este manual
-distingue **pasos disponibles** (recorrido ejecutable) de **afirmaciones
-de prueba** (solo lo verificado). Cubre `R5-RF-06` (ver
+certificación: el gate E2E R5 recertificó `READY` (`t_ca2dc8bf`: dos
+corridas consecutivas 8 passed / 0 failed / 0 skipped con Axe
+0 `serious` / 0 `critical` sobre HEAD `6aabd81` con fix AA; historial:
+gate previo `t_712c60bc` en `NOT_READY` por contraste TaskCard, §7).
+Este manual distingue **pasos disponibles** (recorrido ejecutable) de
+**afirmaciones de prueba** (solo lo verificado). Cubre `R5-RF-06` (ver
 `docs/R5_REQUIREMENTS_TRACEABILITY.md`, `docs/RELEASE5.md` y el capítulo
 de limitaciones `docs/R5_LIMITATIONS_VALIDITY_REPRODUCIBILITY.md`).
 
@@ -43,10 +45,11 @@ El proyecto Compose canónico del script en este árbol es `tfm_r3_demo`
 (`scripts/demo.py`, `COMPOSE_PROJECT`; `.env.example`,
 `COMPOSE_PROJECT_NAME`; `OPERATIONS.md`). La serie R5 aislada usa el
 proyecto `tfm_r5_demo` (parametrización `--project-name` de `t_8d8f9f9e`,
-integración `29306df`, levantado `t_4f08f2a5`). Ningún comando toca
-recursos de otros proyectos. Verificar el flag disponible en el árbol
-usado (`python scripts/demo.py up --help`) y, si no existe, aislar con
-Compose explícito:
+integración `29306df`, levantado `t_4f08f2a5`, reconstruida con fix AA
+`6aabd81` en `t_e6b7a3ed`, recertificada en `t_ca2dc8bf`). Ningún
+comando toca recursos de otros proyectos. Verificar el flag disponible
+en el árbol usado (`python scripts/demo.py up --help`) y, si no existe,
+aislar con Compose explícito:
 
 ```bash
 python scripts/demo.py up                  # levanta el stack demo (5 servicios)
@@ -55,13 +58,13 @@ curl http://127.0.0.1:8000/health          # {"status":"ok"} (backend directo, p
 curl http://127.0.0.1:80/health            # 200 vía Nginx (puerta del gate)
 ```
 
-Preflight esperado (evidencia `t_4f08f2a5`): 5/5 servicios healthy y
-`/` 200, `/tv` 200, `/leanfarming` 307 (redirección a login sin sesión)
-vía Nginx. Importante: el frontend usa API same-origin y **solo
-resuelve vía Nginx (`http://127.0.0.1:80`)**; el acceso directo a
-`http://127.0.0.1:3000` devuelve login 404 + «Sistema desconectado» y
-no es ruta soportada (sonda inválida documentada en `t_712c60bc`).
-Toda la demo se navega por `:80`.
+Preflight esperado (evidencia `t_ca2dc8bf` sobre `6aabd81`): 5/5
+servicios healthy y `/` 200, `/tv` 200, `/leanfarming` 307
+(redirección a login sin sesión) vía Nginx. Importante: el frontend usa
+API same-origin y **solo resuelve vía Nginx (`http://127.0.0.1:80`)**;
+el acceso directo a `http://127.0.0.1:3000` devuelve login 404 +
+«Sistema desconectado» y no es ruta soportada (sonda inválida
+documentada en `t_712c60bc`). Toda la demo se navega por `:80`.
 
 ## 3. Credenciales demo: inyección efímera y redactada
 
@@ -155,13 +158,20 @@ tareas, scheduler materializando recurrencias cada hora (repetir solo
 incrementa `omitidos`, nunca duplica), reset limitado a sintético,
 `/tv` sin mutaciones, 403 en español sin capability.
 
-NO afirmar (pendiente, gate `NOT_READY`): que el smoke portable pasa
-8/8 (real: 4 passed / 1 failed / 3 no ejecutados), que accesibilidad
-está certificada (real: 1 Axe `serious` pendiente — contraste 4.48 de
-`text-app-dim` sobre `bg-state-info/10` en tarjetas `programada`,
-`TaskCard.tsx:55/66/87` —; 0 `critical`), que transiciones/scheduler/
-lectura fueron ejercitados en la corrida 1 (no ejecutados por corte
-serial; segunda corrida pendiente), ni nada productivo/clínico/causal.
+Afirmable (verificado en la recertificación `t_ca2dc8bf` sobre
+`6aabd81`): que el smoke portable pasa 8/8 en dos corridas consecutivas
+sin skips, con Axe 0 `serious` / 0 `critical` (viewports 4/4, workflow
+y superficie de lectura incluidos), gate estático 4/4 y typecheck/lint
+verdes; que transiciones/scheduler/lectura fueron ejercitados en ambas
+corridas. Historial honesto: la primera certificación `t_712c60bc`
+quedó en 4 passed / 1 failed / 3 no ejecutados por 1 Axe `serious`
+(contraste 4.48 de `text-app-dim` sobre `bg-state-info/10` en tarjetas
+`programada`, `TaskCard.tsx:55/66/87`; 0 `critical`), corregido por el
+fix `6aabd81` antes de recertificar.
+
+NO afirmar: nada productivo/clínico/causal, aptitud para producción,
+certificación WCAG completa, ni estado `READY` de R5 como release (lo
+declara solo el ensamblaje `t_eee38bc3` con evidencia completa).
 
 ## 8. Cómo ejecutar el gate sin revelar secretos
 
@@ -172,16 +182,18 @@ python scripts/demo.py status
 #   PLAYWRIGHT_BASE_URL=http://127.0.0.1:80 npx playwright test \
 #     release1-smoke-portable --workers=1
 # (El spec portable pertenece a la serie R5 —commit 14d7950, integrado
-# en 1821920/29306df— y se ejecuta sobre ese árbol, no sobre este HEAD
-# documental 68132c2; ver nota de trazabilidad en
-# docs/R5_LIMITATIONS_VALIDITY_REPRODUCIBILITY.md §5.)
-# Gate estático previo (sin secretos, 4/4 en la integración 1821920):
+# en 1821920/29306df y recertificado sobre 6aabd81 en t_ca2dc8bf— y se
+# ejecuta sobre ese árbol, no sobre este HEAD documental; ver nota de
+# trazabilidad en docs/R5_LIMITATIONS_VALIDITY_REPRODUCIBILITY.md §5.)
+# Gate estático previo (sin secretos; 4/4 en la integración 1821920 y
+# en la recertificación t_ca2dc8bf):
 #   npx playwright test release1-smoke-portable.static --workers=1
 ```
 
 Controles: `workers=1` serial, base `:80` (nunca `:3000` directo),
-`reset` sintético antes de corrida certificante, registrar resultado
-con traza Axe. Fallos de red/puertos/Docker = entorno, no regresión.
+`reset` sintético antes de corrida certificante, registrar ambas
+corridas con traza Axe. Fallos de red/puertos/Docker = entorno, no
+regresión.
 
 ## 9. Teardown limitado a `tfm_r5_demo`
 

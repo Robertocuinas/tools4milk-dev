@@ -5,11 +5,16 @@ certificación de despliegue, ni validación clínica/científica/productiva, ni
 evidencia de datos reales. Cubre `R5-RF-05` (ver
 `docs/R5_REQUIREMENTS_TRACEABILITY.md` y `docs/RELEASE5.md`).
 
-Resultado del gate E2E que condiciona este capítulo: `NOT_READY` según
-`t_712c60bc` (smoke portable contra demo aislada `tfm_r5_demo` en la
-integración `29306df`: 4 passed / 1 failed / 3 no ejecutados; gate
-estático 4/4 passed). Nada de lo declarado como pendiente se presenta
-aquí como verificado.
+Resultado del gate E2E que condiciona este capítulo: `READY` según
+` t_ca2dc8bf` (recertificación del smoke portable contra demo aislada
+`tfm_r5_demo` en el HEAD `6aabd81` con fix AA: dos corridas consecutivas
+8 passed / 0 failed / 0 skipped, Axe 0 `serious` / 0 `critical`; gate
+estático 4/4, typecheck/lint verdes, sin cambios de código). Historial
+honesto: el gate previo `t_712c60bc` cerró `NOT_READY` (4 passed / 1 failed
+/ 3 no ejecutados por contraste real en TaskCard sobre `29306df`); el fix
+`6aabd81` lo corrigió y la demo se reconstruyó (`t_e6b7a3ed`) antes de
+recertificar. Nada de lo declarado como límite se presenta aquí como
+capacidad verificada.
 
 ## 1. Datos: 100 % sintéticos, identidades ficticias
 
@@ -83,34 +88,51 @@ Demostrado en fase R5 (reejecutable previo al gate E2E):
   con 5/5 servicios healthy y `/health` 200 en backend y Nginx
   (`t_4f08f2a5`).
 
-Gate E2E R5 — resultado real `NOT_READY` (`t_712c60bc`):
+Gate E2E R5 — historial honesto y resultado vigente:
 
-- Corrida 1 (serial, `workers=1`, base `http://127.0.0.1:80` vía Nginx):
+- Primera certificación `t_712c60bc` (integración `29306df`): corrida 1
+  (serial, `workers=1`, base `http://127.0.0.1:80` vía Nginx):
   4 passed / 1 failed / 3 no ejecutados. Viewports
   móvil/tablet/escritorio/TV: axe limpio (4/4). Recorrido workflow:
-  FALLO por Axe `serious` real de producto.
-- Defecto de producto, reproducible y determinista: contraste 4.48
+  FALLO por Axe `serious` real de producto — contraste 4.48
   (fg `#5c7268` `text-app-dim` sobre bg `#e9effd`
   `bg-state-info/10`) en tarjetas `programada` del kanban, en
   `frontend/src/components/leanfarming/TaskCard.tsx` líneas 55 (línea
   Zona), 66 (bloque fecha) y 87 (etiqueta estado). El fix AA `00c02b4`
-  cambió el cuerpo a `text-state-info-ink` pero no estos tres
-  sub-elementos. Requiere fix de producto, no del spec. 0 `critical`.
-- Corrida 2 no ejecutada: el criterio exige primera corrida 8/8 para
-  repetir; no se cumple. Transiciones de tareas, scheduler y lectura
-  `/tv` no ejercitados por corte serial tras el fallo.
-- Sonda inválida descartada (no cuenta como intento): corrida directa
-  contra `http://127.0.0.1:3000` con login 404 + «Sistema
-  desconectado». El frontend usa API same-origin y solo resuelve vía
-  Nginx (`:80`). Es entorno, no producto.
+  había cambiado el cuerpo a `text-state-info-ink` pero no estos tres
+  sub-elementos. 0 `critical`. Corrida 2 no ejecutada (el criterio exige
+  primera corrida 8/8 para repetir). Transiciones, scheduler y lectura
+  `/tv` no ejercitados por corte serial. Sonda inválida descartada (no
+  cuenta como intento): acceso directo a `http://127.0.0.1:3000` con
+  login 404 + «Sistema desconectado»; el frontend usa API same-origin y
+  solo resuelve vía Nginx (`:80`). Es entorno, no producto.
+- Fix `6aabd81` (`t_a9341392`, 1 fichero, 3 líneas): elimina el override
+  `text-app-dim` en los 3 sub-elementos para heredar la tinta AA del
+  padre por estado; contrastes verificados ≥ 4.5 (p. ej. programada
+  info-ink `#1e40af` sobre `#e9effd` = 7.57); `tsc --noEmit` exit 0,
+  `eslint TaskCard.tsx` exit 0, `git diff --check` limpio, sin Docker.
+- Demo reconstruida `t_e6b7a3ed` vía flujo oficial
+  (`python3 scripts/demo.py up --project-name tfm_r5_demo`) desde HEAD
+  `6aabd81`: 5/5 servicios healthy, backend y Nginx `/health` 200.
+- Recertificación `t_ca2dc8bf` (HEAD `6aabd81`, proyecto
+  `tfm_r5_demo`, sin cambios de código entre corridas): preflight 5/5
+  Up healthy, backend `/health` 200, Nginx `/health` 200, app `/` 200,
+  `/tv` 200, `/leanfarming` 307 (redirect a login sin sesión, esperado);
+  gate estático 4/4 + `tsc --noEmit` exit 0 + `eslint TaskCard.tsx`
+  exit 0 + `git diff --check` limpio; corrida 1: 8 passed / 0 failed /
+  0 skipped (serial `workers=1`, base `http://127.0.0.1:80`); corrida 2:
+  8 passed / 0 failed / 0 skipped en idénticas condiciones (el
+  pacing/retry de cuota de login actuó y pasó); Axe 0 `serious` /
+  0 `critical` en ambas (asserts AxeBuilder inline en 4 viewports +
+  workflow + superficie de lectura).
 
-Pendiente (no afirmado):
+Pendiente / fuera de lo afirmado:
 
-- Segunda corrida 8/8 sin skips ni Axe `serious`/`critical`, tras fix
-  del contraste TaskCard.
-- Transiciones de tareas, scheduler y solo-lectura `/tv` bajo gate
-  portable (no ejecutados en la corrida 1).
-- Cualquier declaración `READY` de R5.
+- Cualquier declaración `READY` de R5 como release (solo el ensamblaje
+  `t_eee38bc3` puede declarar `READY_LOCAL` con evidencia completa,
+  incluida la limpieza `tfm_r5_demo` verificada).
+- Cualquier generalización a despliegue, producción, datos reales o
+  validez clínica/científica/causal.
 
 ## 4. AEMET opcional; fallos de red/entorno no son regresiones
 
@@ -131,29 +153,31 @@ Pendiente (no afirmado):
 
 - Spec portable `frontend/playwright/release1-smoke-portable.spec.ts`
   (+ gate estático `release1-smoke-portable.static.spec.ts` 4/4,
-  verificado en la integración `1821920`): parametrizado por entorno
+  verificado en la integración `1821920` y en la recertificación
+  `t_ca2dc8bf`): parametrizado por entorno
   (`PLAYWRIGHT_BASE_URL`, `TFM_DEMO_PASSWORD`), sin credenciales
   literales (ver `frontend/playwright/demo-credentials.ts`, presente en
   este árbol), sin CDN externo para axe, rutas de captura
   configurables. Nota de trazabilidad: el spec portable se creó en la
   serie R5 (commit `14d7950`, integrado en `1821920`/`29306df`) y llega
   al árbol final vía merge en `t_eee38bc3`; no existe aún en este HEAD
-  `68132c2`, por lo que su ruta se cita como referencia de la serie R5
-  verificada en `t_712c60bc`, no como fichero de este árbol. El legacy
-  `e2e/release1-smoke.mjs` queda intacto hasta sustitución equivalente
-  demostrada.
-- Cobertura del portable (cuando pasa): viewports, login, workflow
-  leanfarming, transiciones de tareas, escenarios del scheduler y
-  solo-lectura `/tv`. En la corrida R5 solo viewports (4/4) quedaron
-  verificados; el resto está pendiente por el corte serial (§3).
+  documental, por lo que su ruta se cita como referencia de la serie R5
+  verificada en `t_712c60bc`/`t_ca2dc8bf`, no como fichero de este
+  árbol. El legacy `e2e/release1-smoke.mjs` queda intacto hasta
+  sustitución equivalente demostrada.
+- Cobertura del portable (verificada en la recertificación 8/8 x2):
+  viewports, login, workflow leanfarming, transiciones de tareas,
+  escenarios del scheduler y solo-lectura `/tv`. Cada corrida consume
+  1 PUT válido del pool demo de transiciones; reintentos adyacentes sin
+  `reset` sintético pueden encontrar datos distintos.
 - Accesibilidad: base reutilizable en `frontend/ACCESSIBILITY.md`
   (foco visible, objetivos ≥44 px, nombres accesibles, `SyntheticMarker`,
   `/tv` solo lectura). No constituye certificación WCAG completa: la
   validación final exige revisión manual con lector de pantalla,
   contraste sobre todas las combinaciones dinámicas y navegadores
-  objetivo. Evidencia R5: 1 violación `serious` real pendiente (TaskCard
-  programada, §3); 0 `critical`. R4-5 histórico era cero/cero, pero no
-  se hereda como estado actual.
+  objetivo. Evidencia R5 vigente: 0 `serious` / 0 `critical` en ambas
+  corridas recertificadas (el defecto `serious` inicial quedó corregido
+  por `6aabd81` y verificado por Axe en `t_ca2dc8bf`).
 
 ## 6. Amenazas a la validez
 
@@ -164,33 +188,35 @@ Pendiente (no afirmado):
   reintento-429 introduce esperas (~65 s) si hay ejecuciones adyacentes.
   Mitigación: `reset` sintético (solo filas `synthetic/generated`) antes
   de cada corrida certificante y serie aislada `tfm_r5_demo`.
-- Interna: el corte serial tras el fallo deja 3 specs sin ejecutar; no
-  puede inferirse su resultado. La historia de merges (`1821920`,
-  `29306df`) es trazable sin squash/cherry-pick; cualquier desviación
-  del flujo oficial invalida la comparación.
+- Interna: la historia de merges (`1821920`, `29306df`, fix `6aabd81`)
+  es trazable sin squash/cherry-pick; cualquier desviación del flujo
+  oficial invalida la comparación. Entre las dos corridas
+  recertificantes no hubo cambios de código, Docker, datos ni
+  configuración (verificado en `t_ca2dc8bf`).
 - Externa: resultados solo válidos para el stack Compose local
   (Postgres 15 + backend + scheduler + frontend + nginx) en puertos
   80/3000/5432/8000. Sin Redis/Celery/TimescaleDB/S3/ML/WebSocket/SSE
   (excluidos por `docs/RELEASE5.md`, R6 fuera de alcance). No
   generalizar a despliegue, TLS, dominio, backups, observabilidad
   productiva ni rollback: R6 sigue excluido.
-- Conclusión: con 1 fallo Axe `serious`, la conclusión es `NOT_READY`.
-  Declarar `READY` o certificar accesibilidad con este defecto sería
-  conclusión no sustentada. La segunda corrida solo procede tras fix de
-  producto + primera corrida 8/8.
+- Conclusión: con dos corridas 8/8 sin skips y Axe 0/0, la conclusión
+  del gate portable es `READY` (alcance: recorrido demo sintético). No
+  es certificación de accesibilidad completa, ni validación
+  clínica/científica/productiva, ni aptitud para producción. Declarar
+  cualquiera de esas sería conclusión no sustentada.
 
 ## 7. Procedimiento de repetición con controles de entorno
 
 Precondiciones (registrarlas junto al resultado):
 
-- Rama/commit exacto (p. ej. `29306df`), `git status` limpio salvo lo
-  declarado, Python 3.12+, Docker Desktop corriendo, puertos
-  80/3000/5432/8000 libres, fecha/hora de la corrida.
+- Rama/commit exacto (p. ej. `6aabd81` con fix AA incluido),
+  `git status` limpio salvo lo declarado, Python 3.12+, Docker Desktop
+  corriendo, puertos 80/3000/5432/8000 libres, fecha/hora de la corrida.
 
 Pasos (flujo oficial; en este árbol el proyecto canónico del script es
 `tfm_r3_demo` — ver `scripts/demo.py`, `COMPOSE_PROJECT`, `.env.example`
 `COMPOSE_PROJECT_NAME` —; la serie R5 aislada usa `tfm_r5_demo` según
-`t_8d8f9f9e`/`t_4f08f2a5`):
+`t_8d8f9f9e`/`t_4f08f2a5`/`t_e6b7a3ed`):
 
 ```bash
 python scripts/demo.py init        # genera .env local, idempotente; nunca imprime secretos
@@ -205,16 +231,19 @@ python scripts/demo.py down        # apaga SOLO el proyecto demo usado
 
 Controles: base siempre vía Nginx (`http://127.0.0.1:80`), nunca
 directo a `:3000`; `workers=1` serial; `reset` sintético antes de
-corrida certificante; registrar `4 passed / 1 failed / 3 no ejecutados`
-(o el resultado obtenido) con traza Axe completa; ante fallo de
-red/puertos/Docker, clasificar como entorno y repetir tras sanear, sin
-contarlo como intento de producto.
+corrida certificante; registrar ambas corridas (8/8 + 8/8, sin skips)
+con traza Axe completa; ante fallo de red/puertos/Docker, clasificar
+como entorno y repetir tras sanear, sin contarlo como intento de
+producto.
 
 ## 8. Riesgo residual
 
-- Defecto de contraste TaskCard programada pendiente de fix (Axe
-  `serious`, 4.48 < 4.5). Demo `tfm_r5_demo` queda activa para recogida
-  de evidencia/teardown por la tarea siguiente. Credenciales solo en
-  memoria vía runner temporal fuera del repo. Resultados Playwright
-  preservados en `frontend/test-results`. R6 excluido: nada de lo aquí
-  descrito es apto para producción.
+- Defecto inicial de contraste TaskCard programada (Axe `serious`,
+  4.48 < 4.5) corregido en `6aabd81` y recertificado con Axe 0/0 en dos
+  corridas (`t_ca2dc8bf`). Riesgo residual bajo: pool demo con
+  transiciones válidas parcialmente consumido por las 2 corridas (1 PUT
+  válido por corrida); demo `tfm_r5_demo` queda activa para
+  recogida de evidencia/teardown por la tarea siguiente. Credenciales
+  solo en memoria vía runner temporal fuera del repo. Resultados
+  Playwright preservados en `frontend/test-results`. R6 excluido: nada
+  de lo aquí descrito es apto para producción.
