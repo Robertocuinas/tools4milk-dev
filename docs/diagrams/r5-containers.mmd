@@ -1,0 +1,40 @@
+%% TOOLS4MILK R5 — Vista de contenedores (R5-RF-02).
+%% Cinco servicios reales de docker-compose.yml, proyecto tfm_r3_demo.
+%% Fuentes: docker-compose.yml, .env.example, nginx/nginx.conf,
+%%          backend/Dockerfile (usuario appuser), OPERATIONS.md (matriz de puertos).
+flowchart TB
+    subgraph HOST["Host demo (puertos 127.0.0.1)"]
+        direction LR
+        USER80["Puerto 80<br/>Nginx"]
+        USER3000["Puerto 3000<br/>frontend directo"]
+        USER8000["Puerto 8000<br/>backend directo"]
+        USER5432["Puerto 5432<br/>Postgres"]
+    end
+
+    subgraph NET["Red Compose tfm_r3_demo"]
+        direction TB
+        NGINX["nginx:alpine (tfm-nginx)<br/>proxy inverso<br/>nginx/nginx.conf"]
+        FRONT["frontend (tfm-frontend)<br/>Next.js + React Node 24<br/>puerto 3000"]
+        BACK["backend (tfm-backend)<br/>FastAPI uvicorn :8000<br/>apply_migrations.py + uvicorn app.main:app<br/>usuario no-root appuser"]
+        SCHED["scheduler (tfm-synthetic-scheduler)<br/>misma imagen backend<br/>run_synthetic_scheduler.py<br/>--interval --profile --scenario"]
+        DB["db (tfm_postgres)<br/>postgres:15-alpine<br/>tools4milk + init.sql<br/>volumen postgres_data"]
+    end
+
+    USER80 -- "visita<br/>HTTP" --> NGINX
+    USER3000 -- "visita directa<br/>HTTP" --> FRONT
+    USER8000 -- "usa directo<br/>HTTP /api/v1, /docs" --> BACK
+    USER5432 -- "inspeccion local<br/>TCP (solo demo)" --> DB
+
+    NGINX -- "enruta /api/, /health,<br/>/docs, /redoc, /openapi.json<br/>proxy HTTP" --> BACK
+    NGINX -- "enruta / restante<br/>proxy HTTP" --> FRONT
+    FRONT -- "llama API<br/>HTTP /api/v1 (misma red)" --> BACK
+    BACK -- "lee y escribe<br/>SQL psycopg" --> DB
+    SCHED -- "materializa recurrencias<br/>SQL idempotente" --> DB
+    BACK -- "migra esquema<br/>0000..0012 al arrancar" --> DB
+    SCHED -- "escribe heartbeat<br/>/tmp/tools4milk-scheduler-alive" --> SCHED
+
+    NGINX -. "depends_on healthy<br/>backend + frontend" .-> BACK
+    NGINX -. "depends_on healthy<br/>backend + frontend" .-> FRONT
+    BACK -. "depends_on healthy<br/>db" .-> DB
+    SCHED -. "depends_on healthy<br/>db + backend" .-> DB
+    FRONT -. "depends_on<br/>backend" .-> BACK
