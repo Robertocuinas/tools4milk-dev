@@ -52,7 +52,7 @@ export function TaskCard({
               {task.tarea_catalogo?.nombre ?? "Tarea"}
             </p>
             {task.zona_id && (
-              <p className="text-xs text-app-dim mt-1">
+              <p className="text-xs mt-1">
                 Zona: {task.zona_id}
               </p>
             )}
@@ -63,7 +63,7 @@ export function TaskCard({
         </div>
 
         {!isCompact && (
-          <div className="space-y-1 text-xs text-app-dim">
+          <div className="space-y-1 text-xs">
             {task.fecha_programada && (
               <p>
                 {new Date(task.fecha_programada).toLocaleString("es-ES", {
@@ -84,7 +84,7 @@ export function TaskCard({
           </div>
         )}
 
-        <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-app-dim">
+        <div className="text-[10px] font-bold uppercase tracking-[0.1em]">
           {task.estado}
         </div>
       </div>

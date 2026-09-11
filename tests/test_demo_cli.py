@@ -113,6 +113,52 @@ def test_smoke_y_reset_dry_run_sin_red(monkeypatch, tmp_path, capsys):
     assert "tfm_r3_demo" in out or "comprobaría" in out
 
 
+def test_project_name_parametrizable_y_validado(monkeypatch, tmp_path, capsys):
+    demo = load_demo(monkeypatch, tmp_path)
+    # Retrocompatibilidad: sin flag el proyecto sigue siendo tfm_r3_demo.
+    assert demo.compose_base() == [
+        "docker",
+        "compose",
+        "-p",
+        "tfm_r3_demo",
+        "-f",
+        "docker-compose.yml",
+    ]
+    assert demo.compose_base("tfm_r5_demo")[3] == "tfm_r5_demo"
+    assert demo.validate_project_name("tfm_r5_demo") == "tfm_r5_demo"
+
+    capsys.readouterr()
+    assert demo.main(["up", "--dry-run"]) == 0
+    out_default = capsys.readouterr().out
+    assert "-p tfm_r3_demo" in out_default
+
+    assert demo.main(["up", "--dry-run", "--project-name", "tfm_r5_demo"]) == 0
+    out_r5 = capsys.readouterr().out
+    assert "-p tfm_r5_demo" in out_r5
+    assert "-p tfm_r3_demo" not in out_r5
+
+    assert (
+        demo.main(["status", "--dry-run", "--project-name", "tfm_r5_demo"]) == 0
+    )
+    assert "-p tfm_r5_demo" in capsys.readouterr().out
+
+    for bad in ("", "bad name", "a;b", "x$(y)", "../escape", "MAYUS"):
+        with pytest.raises(ValueError):
+            demo.validate_project_name(bad)
+        assert demo.main(["up", "--dry-run", "--project-name", bad]) == 2
+        capsys.readouterr()
+
+    parser = demo.build_parser()
+    assert "--project-name" in parser.format_help()
+    assert (
+        parser.parse_args(["up", "--project-name", "tfm_r5_demo"]).project_name
+        == "tfm_r5_demo"
+    )
+    assert (
+        parser.parse_args(["up"]).project_name == demo.DEFAULT_COMPOSE_PROJECT
+    )
+
+
 def test_demo_py_solo_biblioteca_estandar():
     tree = DEMO_PY.read_text(encoding="utf-8")
     assert "import requests" not in tree
