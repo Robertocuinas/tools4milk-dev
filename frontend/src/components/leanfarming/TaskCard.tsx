@@ -12,10 +12,10 @@ interface TaskCardProps {
 }
 
 const stateColors = {
-  programada: "bg-state-info/10 border-state-info/30 text-state-info",
-  retrasada: "bg-state-critica/10 border-state-critica/30 text-state-critica",
+  programada: "bg-state-info/10 border-state-info/30 text-state-info-ink",
+  retrasada: "bg-state-critica/10 border-state-critica/30 text-state-critica-ink",
   pausada: "bg-brand/10 border-brand/30 text-brand",
-  ejecutada: "bg-state-ok/10 border-state-ok/30 text-state-ok",
+  ejecutada: "bg-state-ok/10 border-state-ok/30 text-state-ok-ink",
   cancelada: "bg-app-bg border-app-border text-app-dim",
 };
 
