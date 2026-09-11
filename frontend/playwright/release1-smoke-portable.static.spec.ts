@@ -59,4 +59,18 @@ test.describe("R5-RF-09 gate estatico del smoke portable", () => {
     expect(existsSync(paths.portable)).toBe(true);
     expect(existsSync(paths.legacy)).toBe(true);
   });
+
+  test("el sustituto corre en serie, sin locators genericos y con contrato de mutacion", async ({}, testInfo: TestInfo) => {
+    const source = readFileSync(specPaths(testInfo.file).portable, "utf8");
+    // Misma identidad demo en todas las pruebas: ejecucion serial explicita.
+    expect(source).toContain('mode: "serial"');
+    // Sin selectores globales ambiguos del legacy.
+    expect(source).not.toContain(".nth(");
+    // PUT /api/v1/tasks/{id} exige idempotencia y version optimista.
+    expect(source).toContain("X-Operation-Id");
+    expect(source).toContain("expected_version");
+    // El login respeta la cuota del backend (5 intentos/IP/60s): espaciado
+    // entre intentos y reintento unico ante el aviso de limite.
+    expect(source).toContain("Demasiados intentos");
+  });
 });

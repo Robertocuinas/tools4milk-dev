@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 // R5-RF-09: sustituto portable y seguro del smoke legacy de Release 1.
 //
@@ -11,6 +11,10 @@ import { expect, test, type Page } from "@playwright/test";
 //   DEMO_PASSWORD: contrasena demo inyectada (nunca se registra).
 //   E2E_WORKFLOW_PATH: ruta absoluta de la superficie de turnos y tareas.
 //   E2E_TV_PATH: ruta absoluta de la superficie de solo lectura.
+//
+// Serie obligatoria: todas las pruebas comparten la misma identidad demo,
+// asi que el bloque se ejecuta en modo serial para que ningun login compita
+// con otro (la verificacion ademas usa `--workers=1`).
 //
 // Capturas sin rutas fijas: se usan las facilities de Playwright (traza, video
 // y captura solo ante fallo) mas anexos JSON del informe; por eso no se exige
@@ -75,14 +79,90 @@ async function loginAsAdmin(
   password: string
 ): Promise<void> {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.locator("input").nth(0).fill(user);
-  await page.locator('input[type="password"]').fill(password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await page
-    .getByRole("button", { name: "Actualizar datos del dashboard" })
-    .first()
-    .waitFor({ timeout: 60000 });
+  // Locators semanticos acotados al formulario real de inicio de sesion
+  // (placeholders del componente LoginScreen + boton de envio del form).
+  const form = page
+    .locator("form", { has: page.getByRole("button", { name: "Entrar" }) })
+    .first();
+  const userField = form.getByPlaceholder("nombre.apellido");
+  const passwordField = form.getByPlaceholder("Contraseña");
+  const submit = form.getByRole("button", { name: "Entrar" });
+  await expect(userField).toBeVisible({ timeout: 30000 });
+
+  await paceLoginSlot();
+  await fillAndSubmit(userField, passwordField, submit, user, password);
+  try {
+    await expect(page).toHaveURL(/dashboard/, { timeout: 30000 });
+  } catch (firstAttemptError) {
+    // El backend limita POST /auth/login a 5 intentos por IP y ventana de
+    // 60s: si otra ejecucion adyacente saturo la cuota, el formulario muestra
+    // el aviso y basta con esperar a que deslice la ventana y reintentar una
+    // sola vez con la misma identidad (sin credenciales distintas ni atajos).
+    const limited = await page
+      .getByText(/Demasiados intentos de login/)
+      .count();
+    if (limited === 0) throw firstAttemptError;
+    await page.waitForTimeout(65000);
+    await paceLoginSlot();
+    await fillAndSubmit(userField, passwordField, submit, user, password);
+    await expect(page).toHaveURL(/dashboard/, { timeout: 60000 });
+  }
+  // Senal estable de sesion: el login redirige a /dashboard; despues se
+  // confirma el marcador del dashboard antes de dar la sesion por valida.
+  await expect(
+    page
+      .getByRole("button", { name: "Actualizar datos del dashboard" })
+      .first()
+  ).toBeVisible({ timeout: 60000 });
   await page.waitForLoadState("networkidle");
+  markLoginSlot();
+}
+
+async function fillAndSubmit(
+  userField: Locator,
+  passwordField: Locator,
+  submit: Locator,
+  user: string,
+  password: string
+): Promise<void> {
+  await userField.click();
+  await userField.fill(user);
+  await passwordField.click();
+  await passwordField.fill(password);
+  // El boton vive deshabilitado hasta que el formulario es valido
+  // (usuario no vacio y contrasena de al menos 3 caracteres): esperar la
+  // habilitacion explicita evita el clic perdido contra el boton inerte.
+  await expect(submit).toBeEnabled({ timeout: 15000 });
+  await submit.click();
+}
+
+// El backend limita el login a 5 intentos por IP y ventana de 60s y el smoke
+// inicia sesion una vez por prueba con la misma identidad y origen: espaciar
+// los intentos dentro del proceso (maximo 4 por cada 62s) evita auto-saturar
+// la cuota. Las marcas solo viven en memoria del proceso actual.
+const loginAttemptMarks: number[] = [];
+
+function pruneLoginMarks(now: number): void {
+  while (
+    loginAttemptMarks.length > 0 &&
+    now - loginAttemptMarks[0] > 62000
+  ) {
+    loginAttemptMarks.shift();
+  }
+}
+
+async function paceLoginSlot(): Promise<void> {
+  let now = Date.now();
+  pruneLoginMarks(now);
+  while (loginAttemptMarks.length >= 4) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    now = Date.now();
+    pruneLoginMarks(now);
+  }
+}
+
+function markLoginSlot(): void {
+  loginAttemptMarks.push(Date.now());
 }
 
 const VIEWPORTS = [
@@ -102,6 +182,8 @@ const SCHEDULER_SCENARIOS = [
 ] as const;
 
 test.describe("Release 1 smoke portable (R5-RF-09)", () => {
+  test.describe.configure({ mode: "serial", timeout: 180000 });
+
   for (const viewport of VIEWPORTS) {
     test(`viewport ${viewport.name}: login, marcador sintetico y axe`, async ({
       page,
@@ -172,52 +254,94 @@ test.describe("Release 1 smoke portable (R5-RF-09)", () => {
       invalidStatus: number;
     };
 
+    // Contrato vigente de PUT /api/v1/tasks/{id} (mutaciones Release 2):
+    // cabecera X-Operation-Id con UUID por operacion (sin ella: 428) y campo
+    // expected_version igual a la version servida por GET (desfase: 409).
+    // El siguiente estado valido se deriva del estado servido segun las
+    // transiciones canonicas (pendiente->en_curso, en_curso->verificacion,
+    // verificacion->ejecutada); las tareas terminales se saltan. La sonda
+    // invalida usa un X-Operation-Id malformado (rechazo 422 determinista
+    // sin mutar estado) para seguir verificando el rechazo.
     const outcome = await page.evaluate(async (): Promise<TransitionOutcome> => {
       const empty: TransitionOutcome = {
         found: false,
         validStatus: 0,
         invalidStatus: 0,
       };
-      const listResponse = await fetch("/api/v1/tasks?limit=20", {
+      const nextByEstado: Record<string, string> = {
+        programada: "en_curso",
+        retrasada: "en_curso",
+        en_curso: "verificacion",
+        verificacion: "ejecutada",
+      };
+      const listResponse = await fetch("/api/v1/tasks?limit=50", {
         credentials: "include",
       });
       if (!listResponse.ok) return empty;
       const payload: unknown = await listResponse.json();
       if (!Array.isArray(payload)) return empty;
-      const target = payload.find(
-        (item: unknown): item is { id: string; estado: string } => {
+      type TaskRow = { id: string; estado: string };
+      const candidates = payload.filter(
+        (item: unknown): item is TaskRow => {
           if (typeof item !== "object" || item === null) return false;
           const record = item as Record<string, unknown>;
           return (
             typeof record["id"] === "string" &&
-            (record["estado"] === "programada" || record["estado"] === "retrasada")
+            typeof record["estado"] === "string" &&
+            typeof nextByEstado[record["estado"] as string] === "string"
           );
         }
       );
-      if (!target) return empty;
-      const valid = await fetch(`/api/v1/tasks/${target.id}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ estado: "ejecutada" }),
-      });
-      const invalid = await fetch(`/api/v1/tasks/${target.id}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ estado: "estado_invalido" }),
-      });
-      return {
-        found: true,
-        validStatus: valid.status,
-        invalidStatus: invalid.status,
-      };
+      for (const target of candidates.slice(0, 12)) {
+        const nextEstado = nextByEstado[target.estado];
+        const detailResponse = await fetch(`/api/v1/tasks/${target.id}`, {
+          credentials: "include",
+        });
+        if (!detailResponse.ok) continue;
+        const detail: unknown = await detailResponse.json();
+        if (typeof detail !== "object" || detail === null) continue;
+        const version = (detail as Record<string, unknown>)["version"];
+        if (typeof version !== "number" || version <= 0) continue;
+        const valid = await fetch(`/api/v1/tasks/${target.id}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "content-type": "application/json",
+            "X-Operation-Id": crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            estado: nextEstado,
+            expected_version: version,
+          }),
+        });
+        // Otra ejecucion pudo avanzar esta tarea entre GET y PUT: probar con
+        // la siguiente candidata en lugar de fallar.
+        if (valid.status === 409) continue;
+        const invalid = await fetch(`/api/v1/tasks/${target.id}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "content-type": "application/json",
+            "X-Operation-Id": "not-a-uuid",
+          },
+          body: JSON.stringify({
+            estado: nextEstado,
+            expected_version: version,
+          }),
+        });
+        return {
+          found: true,
+          validStatus: valid.status,
+          invalidStatus: invalid.status,
+        };
+      }
+      return empty;
     });
 
     if (!outcome.found) {
       test.skip(
         true,
-        "Sin tareas en estado programada/retrasada; transiciones no ejercitadas."
+        "Sin tareas con transicion valida disponible; transiciones no ejercitadas."
       );
       return;
     }
